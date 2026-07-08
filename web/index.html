@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Git AutoPick — 自動化 git cherry-pick 批次工具，支援多專案目錄、自動 rollback 與模擬模式" />
+  <title>Git AutoPick — 自動化 Cherry-Pick 工具</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Skip to main content for keyboard users -->
+  <a class="skip-link" href="#main">跳至主要內容</a>
+
+  <!-- ── Header ───────────────────────────────────────────────────── -->
+  <header class="header" role="banner">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon" aria-hidden="true">🍒</span>
+        <span class="logo-text">Git AutoPick</span>
+        <span class="logo-badge">BETA</span>
+      </div>
+      <nav class="header-nav" aria-label="工具狀態">
+        <div class="status-dot" id="status-dot" aria-live="polite" aria-label="伺服器連線狀態"></div>
+        <span class="status-label" id="status-label">連線中...</span>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ── Main ─────────────────────────────────────────────────────── -->
+  <main id="main" class="main-layout">
+
+    <!-- ── Left Panel: Form ──────────────────────────────────────── -->
+    <section class="panel panel-form" aria-labelledby="form-title">
+      <h1 id="form-title" class="panel-title">
+        <span class="panel-title-icon" aria-hidden="true">⚙️</span>
+        執行參數
+      </h1>
+
+      <form id="pick-form" novalidate>
+
+        <!-- 專案目錄 -->
+        <div class="field-group">
+          <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <label class="field-label">
+              目標專案目錄
+              <span class="field-hint">點擊按鈕選取要處理的專案目錄</span>
+            </label>
+            <button type="button" id="add-dir-btn" class="btn btn-ghost btn-sm" aria-label="新增專案目錄">+ 新增目錄</button>
+          </div>
+          
+          <div id="project-dirs-container" class="dir-list-container" role="list">
+            <div id="dir-list-empty" class="dir-empty">尚無選取的專案目錄</div>
+            <!-- JS 動態插入項目 -->
+          </div>
+          <span class="field-error" id="project-dirs-error" role="alert" aria-live="polite"></span>
+        </div>
+
+        <!-- 目標分支 -->
+        <div class="field-row">
+          <div class="field-group">
+            <label class="field-label" for="branch">目標分支</label>
+            <input
+              type="text"
+              id="branch"
+              name="branch"
+              class="field-input"
+              value="main"
+              placeholder="develop"
+              aria-describedby="branch-error"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <span class="field-error" id="branch-error" role="alert" aria-live="polite"></span>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="remote">Fetch Remote</label>
+            <input
+              type="text"
+              id="remote"
+              name="remote"
+              class="field-input"
+              value="upstream"
+              placeholder="upstream"
+              aria-describedby="remote-error"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <span class="field-error" id="remote-error" role="alert" aria-live="polite"></span>
+          </div>
+        </div>
+
+        <!-- Commit Hash -->
+        <div class="field-group">
+          <label class="field-label" for="commit">Commit Hash</label>
+          <input
+            type="text"
+            id="commit"
+            name="commit"
+            class="field-input field-mono"
+            placeholder="a1b2c3d"
+            aria-describedby="commit-error"
+            autocomplete="off"
+            spellcheck="false"
+            maxlength="40"
+          />
+          <span class="field-error" id="commit-error" role="alert" aria-live="polite"></span>
+        </div>
+
+        <!-- Dry-run toggle -->
+        <div class="field-toggle-row">
+          <label class="toggle-label" for="dry-run">
+            <input type="checkbox" id="dry-run" class="toggle-input" />
+            <span class="toggle-track" aria-hidden="true">
+              <span class="toggle-thumb"></span>
+            </span>
+            <span class="toggle-text">
+              模擬模式 <em>（不實際執行 git 命令）</em>
+            </span>
+          </label>
+        </div>
+
+        <!-- Submit -->
+        <button
+          type="submit"
+          id="submit-btn"
+          class="btn btn-primary"
+          aria-describedby="submit-status"
+        >
+          <span class="btn-icon" aria-hidden="true">▶</span>
+          <span class="btn-text">開始執行</span>
+        </button>
+        <span id="submit-status" class="sr-only" aria-live="polite"></span>
+
+      </form>
+    </section>
+
+    <!-- ── Right Panel: Log + Summary ───────────────────────────── -->
+    <section class="panel panel-output" aria-labelledby="output-title">
+      <div class="output-header">
+        <h2 id="output-title" class="panel-title">
+          <span class="panel-title-icon" aria-hidden="true">📋</span>
+          執行日誌
+        </h2>
+        <button
+          id="clear-btn"
+          class="btn btn-ghost btn-sm"
+          type="button"
+          aria-label="清除日誌"
+        >清除</button>
+      </div>
+
+      <!-- Log stream -->
+      <div
+        id="log-container"
+        class="log-container"
+        role="log"
+        aria-label="執行日誌輸出"
+        aria-live="polite"
+        aria-atomic="false"
+      >
+        <div class="log-empty" id="log-empty">
+          <span aria-hidden="true">🌿</span>
+          <p>執行後日誌將顯示於此</p>
+        </div>
+      </div>
+
+      <!-- Summary cards -->
+      <div id="summary-section" class="summary-section" hidden aria-labelledby="summary-title">
+        <h3 id="summary-title" class="summary-title">執行摘要</h3>
+        <div class="summary-grid" id="summary-grid" role="list"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Progress Overlay ─────────────────────────────────────────── -->
+  <div id="progress-overlay" class="progress-overlay" hidden aria-hidden="true">
+    <div class="progress-pulse" aria-hidden="true"></div>
+  </div>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>

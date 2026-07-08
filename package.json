@@ -1,0 +1,27 @@
+{
+  "name": "gitautopick",
+  "version": "1.0.0",
+  "description": "自動化 git cherry-pick 批次工具",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start":  "node index.js",
+    "pick":   "node index.js",
+    "dry":    "node index.js --dry-run",
+    "web":    "node server.js",
+    "server": "node server.js"
+  },
+
+  "keywords": [
+    "git",
+    "cherry-pick",
+    "automation"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "chalk": "^5.6.2",
+    "express": "^5.2.1",
+    "inquirer": "^14.0.2"
+  }
+}
