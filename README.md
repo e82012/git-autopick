@@ -6,7 +6,7 @@
 
 *   **多專案批次處理**：透過現代版目錄選取器（Windows 原生對話框），一鍵選取多個本地專案進行批次執行。
 *   **自動化復原 (Rollback)**：
-    *   `pull/fetch` 失敗：直接跳過該專案，避免副作用。
+    *   `switch/pull/fetch` 失敗：直接跳過該專案，避免副作用。
     *   `cherry-pick` 衝突：自動執行 `--abort` 清理狀態。
     *   `push` 失敗：自動執行 `reset --hard HEAD~1` 還原 commit。
 *   **防呆與防錯**：自動過濾已存在的 commit；支援「模擬模式 (Dry-Run)」預演執行，不影響本地代碼。

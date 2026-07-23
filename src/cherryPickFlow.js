@@ -3,13 +3,14 @@
  * 單一專案的完整 cherry-pick 流程模組
  *
  * 流程：
+ *   0. git switch {branch}          → 失敗 → 直接記錄（無副作用，無需 rollback）
  *   1. git pull origin {branch}     → 失敗 → rollback（無需 abort，直接記錄）
  *   2. git fetch {remote}           → 失敗 → rollback
  *   3. git cherry-pick {commit}     → 失敗（含已存在判斷）→ abort + rollback
  *   4. git push origin {branch}     → 失敗 → git reset --hard HEAD~1 rollback
  *
  * rollback 策略：
- *   - pull/fetch 失敗：無副作用，直接記錄錯誤即視為 rollback 完成
+ *   - checkout/pull/fetch 失敗：無副作用，直接記錄錯誤即視為 rollback 完成
  *   - cherry-pick 失敗：執行 git cherry-pick --abort 清理衝突狀態
  *   - push 失敗：執行 git reset --hard HEAD~1 還原 commit
  */
@@ -61,6 +62,18 @@ export async function runCherryPickFlow({ projectDir, branch, remote, commit, is
       });
     }
   };
+
+  // ── Step 0: git switch {branch} ──────────────────────────────────────────
+  log(chalk.gray(`git switch ${branch}`), 'info', `git switch ${branch}`);
+  const switchResult = await runGit(['switch', branch], projectDir, isDryRun);
+
+  if (switchResult.exitCode !== 0) {
+    const reason = buildReason(`git switch ${branch} 失敗`, switchResult);
+    log(chalk.red(`✗ ${reason}`), 'error', `✗ ${reason}`);
+    // switch 失敗無副作用，無需 rollback
+    return { status: STATUS.FAILED, reason };
+  }
+  log(chalk.green(`✓ 已切換至 ${branch}`), 'success', `✓ 已切換至 ${branch}`);
 
   // ── Step 1: git pull origin {branch} ─────────────────────────────────────
   log(chalk.gray(`git pull origin ${branch}`), 'info', `git pull origin ${branch}`);
