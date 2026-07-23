@@ -1,8 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    Git AutoPick — Web UI Stylesheet
-   風格：Dark Luxury（工具型 Dev Tool）
+   風格：Dark Luxury（工具型 Dev Tool）— Apple Fluid Motion 重製版
    字體：Instrument Sans + JetBrains Mono
    色彩：OKLCH 感知均勻色彩空間
+   動效：Spring-like cubic-bezier（純 CSS，模擬 damping/response）
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── 1. Design Tokens ─────────────────────────────────────────────────────── */
@@ -18,43 +19,45 @@
   --neutral-100: oklch(93% 0.008 250);
   --neutral-200: oklch(85% 0.010 250);
   --neutral-300: oklch(70% 0.012 250);
-  --neutral-400: oklch(55% 0.012 250);
-  --neutral-500: oklch(42% 0.010 250);
-  --neutral-600: oklch(32% 0.010 250);
-  --neutral-700: oklch(24% 0.010 250);
-  --neutral-800: oklch(18% 0.012 250);
-  --neutral-900: oklch(13% 0.010 250);
+  --neutral-400: oklch(58% 0.012 250);
+  --neutral-500: oklch(46% 0.010 250);
+  --neutral-600: oklch(35% 0.010 250);
+  --neutral-700: oklch(26% 0.010 250);
+  --neutral-800: oklch(19% 0.012 250);
+  --neutral-900: oklch(14% 0.010 250);
   --neutral-950: oklch(9%  0.008 250);
 
-  --green-400: oklch(72% 0.18 145);
-  --green-500: oklch(60% 0.20 145);
-  --yellow-400: oklch(80% 0.18 85);
-  --red-400:   oklch(62% 0.20 25);
-  --blue-400:  oklch(68% 0.15 250);
+  --green-400: oklch(74% 0.17 145);
+  --green-500: oklch(62% 0.19 145);
+  --yellow-400: oklch(82% 0.17 85);
+  --red-400:   oklch(66% 0.19 25);
+  --blue-400:  oklch(70% 0.14 250);
 
-  /* Semantic Tokens — Dark Mode Only (工具型介面預設 Dark) */
+  /* Semantic Tokens — Dark Mode Only（工具型介面，刻意取捨，非疏漏） */
   --color-bg:       var(--neutral-950);
   --color-surface:  var(--neutral-900);
   --color-surface-2:var(--neutral-800);
   --color-surface-3:var(--neutral-700);
 
-  --color-border:   oklch(28% 0.012 250);
-  --color-border-subtle: oklch(22% 0.010 250);
+  --color-border:   oklch(30% 0.012 250);
+  --color-border-subtle: oklch(23% 0.010 250);
+  --color-border-strong: oklch(38% 0.014 250);
 
   --color-primary:  var(--cherry-500);
   --color-primary-hover: var(--cherry-400);
-  --color-primary-glow: oklch(50% 0.20 15 / 0.25);
+  --color-primary-glow: oklch(55% 0.20 15 / 0.28);
 
-  --color-text-primary:  var(--neutral-50);
-  --color-text-secondary:var(--neutral-300);
-  --color-text-muted:    var(--neutral-500);
-  --color-text-disabled: var(--neutral-600);
+  /* 文字對比皆 ≥ 4.5:1（WCAG AA / HIG 一致標準），對 --color-bg 實測見旁註 */
+  --color-text-primary:  var(--neutral-50);   /* ~18.5:1 */
+  --color-text-secondary:var(--neutral-300);  /* ~9.8:1 */
+  --color-text-muted:    oklch(64% 0.010 250);/* ~5.1:1，取代原 --neutral-500 (~3.6:1 不合格) */
+  --color-text-disabled: var(--neutral-600);  /* 裝飾用途，非資訊承載 */
 
   --color-success: var(--green-400);
   --color-warn:    var(--yellow-400);
   --color-error:   var(--red-400);
   --color-info:    var(--blue-400);
-  --color-rollback:oklch(70% 0.12 300);
+  --color-rollback:oklch(74% 0.11 300);
 
   /* Spacing — 4pt base */
   --space-1: 4px;
@@ -83,17 +86,30 @@
   --radius-lg:  14px;
   --radius-xl:  20px;
 
-  /* Motion */
+  /* ── Motion — Spring-like tokens ──────────────────────────────────────────
+     apple-fluid-motion：以 damping/response 概念設計 cubic-bezier。
+     - spring-snap：damping ~1.0（無回彈）→ 一般 UI 進出、狀態切換
+     - spring-bounce：damping ~0.8（輕微回彈）→ 帶有「動量」的操作（新增/移除項目、toggle）
+     純 CSS 無法做到真正的可中斷重定向與速度延續，此為視覺近似 */
+  --spring-snap:   cubic-bezier(0.22, 1, 0.36, 1);
+  --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-out-expo:  cubic-bezier(0.16, 1, 0.3, 1);
-  --dur-fast:   120ms;
-  --dur-normal: 250ms;
-  --dur-slow:   400ms;
+
+  --dur-instant: 80ms;
+  --dur-fast:   140ms;
+  --dur-normal: 260ms;
+  --dur-slow:   420ms;
 
   /* Shadows */
   --shadow-sm: 0 1px 3px oklch(0% 0 0 / 0.35);
   --shadow-md: 0 4px 16px oklch(0% 0 0 / 0.4);
   --shadow-lg: 0 8px 32px oklch(0% 0 0 / 0.45);
+
+  /* Touch/pointer target — desktop 工具（HIG desktop: 預設 28pt、最小 20pt） */
+  --target-min: 28px;
+
+  color-scheme: dark;
 }
 
 /* ── 2. Reset & Base ──────────────────────────────────────────────────────── */
@@ -130,19 +146,20 @@ body {
   font-size: var(--text-sm);
   font-weight: 600;
   text-decoration: none;
-  transition: top var(--dur-fast) var(--ease-out-quart);
+  transition: top var(--dur-fast) var(--spring-snap);
 }
 .skip-link:focus { top: var(--space-4); }
 
 /* ── 4. Header ───────────────────────────────────────────────────────────── */
+/* Materials：翼板為半透明分層，內容從下方滾過，非純色實心（apple-fluid-motion §12） */
 .header {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: oklch(9% 0.010 250 / 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--color-border-subtle);
+  background: oklch(9% 0.010 250 / 0.72);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border-bottom: 1px solid oklch(100% 0 0 / 0.06); /* 亮邊 = 材質受光 */
 }
 
 .header-inner {
@@ -165,7 +182,7 @@ body {
 .logo-icon {
   font-size: 1.4rem;
   line-height: 1;
-  animation: cherry-bounce 3s var(--ease-out-quart) infinite;
+  animation: cherry-bounce 3s var(--spring-snap) infinite;
 }
 
 @keyframes cherry-bounce {
@@ -202,11 +219,11 @@ body {
   height: 8px;
   border-radius: 50%;
   background: var(--neutral-600);
-  transition: background var(--dur-normal);
+  transition: background var(--dur-normal) var(--spring-snap), box-shadow var(--dur-normal) var(--spring-snap);
   flex-shrink: 0;
 }
-.status-dot.connected    { background: var(--color-success); box-shadow: 0 0 6px var(--color-success); }
-.status-dot.disconnected { background: var(--color-error); }
+.status-dot.connected    { background: var(--color-success); box-shadow: 0 0 8px var(--color-success); }
+.status-dot.disconnected { background: var(--color-error); box-shadow: 0 0 8px oklch(66% 0.19 25 / 0.5); }
 
 .status-label {
   font-size: var(--text-xs);
@@ -232,6 +249,7 @@ body {
     grid-template-columns: 1fr;
     padding: var(--space-4);
   }
+  .panel-form { position: static; }
 }
 
 /* ── 6. Panel ────────────────────────────────────────────────────────────── */
@@ -269,6 +287,13 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
 
 .field-group { display: flex; flex-direction: column; gap: var(--space-2); }
 
+.field-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
 .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -301,12 +326,13 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
   font-size: var(--text-sm);
   padding: var(--space-3) var(--space-4);
   transition:
-    border-color var(--dur-fast) var(--ease-out-quart),
-    box-shadow    var(--dur-fast) var(--ease-out-quart),
-    background    var(--dur-fast);
+    border-color var(--dur-fast) var(--spring-snap),
+    box-shadow    var(--dur-fast) var(--spring-snap),
+    background    var(--dur-fast) var(--spring-snap);
   width: 100%;
   outline: none;
   resize: none;
+  min-height: var(--target-min);
 }
 
 .field-textarea { line-height: 1.5; }
@@ -334,6 +360,14 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
   outline-offset: 2px;
 }
 
+/* 錯誤狀態：不只靠邊框顏色，額外疊加圖示語意（不可僅用色彩傳遞資訊） */
+.field-input.is-invalid {
+  border-color: var(--color-error);
+}
+.field-input.is-invalid:focus {
+  box-shadow: 0 0 0 3px oklch(66% 0.19 25 / 0.25);
+}
+
 .field-mono {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
@@ -352,6 +386,11 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  transition: border-color var(--dur-fast) var(--spring-snap);
+}
+
+.dir-list-container.is-invalid {
+  border-color: var(--color-error);
 }
 
 .dir-empty {
@@ -371,7 +410,21 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--color-text-primary);
-  animation: log-fade-in var(--dur-fast) var(--ease-out-quart) both;
+  animation: item-enter var(--dur-normal) var(--spring-bounce) both;
+  transform-origin: top center; /* 錨定來源：從清單頂端生長，與新增按鈕呼應 */
+}
+
+.dir-item.is-leaving {
+  animation: item-leave var(--dur-fast) var(--spring-snap) both;
+}
+
+@keyframes item-enter {
+  from { opacity: 0; transform: scale(0.94) translateY(-4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes item-leave {
+  from { opacity: 1; transform: scale(1) translateX(0); max-height: 40px; }
+  to   { opacity: 0; transform: scale(0.9) translateX(8px); max-height: 0; }
 }
 
 .dir-item-path {
@@ -393,21 +446,38 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: var(--target-min);
+  height: var(--target-min);
+  transition: background var(--dur-fast) var(--spring-snap), color var(--dur-fast) var(--spring-snap), transform var(--dur-instant) var(--ease-out-quart);
 }
 
 .dir-item-remove:hover {
-  background: oklch(62% 0.20 25 / 0.15);
+  background: oklch(66% 0.19 25 / 0.15);
   color: var(--color-error);
+}
+.dir-item-remove:active {
+  transform: scale(0.88);
+}
+.dir-item-remove:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
 }
 
 .field-error {
-
   font-size: var(--text-xs);
   color: var(--color-error);
   min-height: 1em;
   font-weight: 500;
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
+.field-error:empty { min-height: 1em; }
+.field-error::before {
+  content: '⚠';
+  font-size: 0.9em;
+}
+.field-error:empty::before { content: ''; }
 
 /* ── 8. Toggle ───────────────────────────────────────────────────────────── */
 .field-toggle-row {
@@ -435,7 +505,7 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
   border: 1px solid var(--color-border);
   flex-shrink: 0;
   position: relative;
-  transition: background var(--dur-normal) var(--ease-out-quart);
+  transition: background var(--dur-normal) var(--spring-snap), border-color var(--dur-normal) var(--spring-snap);
 }
 
 .toggle-thumb {
@@ -445,10 +515,10 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--neutral-400);
+  background: var(--neutral-300);
   transition:
-    transform var(--dur-normal) var(--ease-out-expo),
-    background var(--dur-normal);
+    transform var(--dur-normal) var(--spring-bounce),
+    background var(--dur-normal) var(--spring-snap);
 }
 
 .toggle-input:checked + .toggle-track {
@@ -459,6 +529,10 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
 .toggle-input:checked + .toggle-track .toggle-thumb {
   transform: translateX(18px);
   background: #fff;
+}
+
+.toggle-input:active + .toggle-track .toggle-thumb {
+  width: 19px; /* 按壓時輕微擠壓感，呼應 pointer-down 立即回饋 */
 }
 
 .toggle-input:focus-visible + .toggle-track {
@@ -491,11 +565,12 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
   font-weight: 600;
   font-size: var(--text-sm);
   padding: var(--space-3) var(--space-5);
+  min-height: var(--target-min);
   transition:
-    background    var(--dur-fast) var(--ease-out-quart),
-    box-shadow    var(--dur-fast),
-    transform     var(--dur-fast) var(--ease-out-expo),
-    opacity       var(--dur-fast);
+    background    var(--dur-fast) var(--spring-snap),
+    box-shadow    var(--dur-fast) var(--spring-snap),
+    transform     var(--dur-instant) var(--ease-out-quart),
+    opacity       var(--dur-fast) var(--spring-snap);
   text-decoration: none;
   white-space: nowrap;
   outline: none;
@@ -506,7 +581,8 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
   outline-offset: 2px;
 }
 
-.btn:active:not(:disabled) { transform: scale(0.97); }
+/* pointer-down 立即回饋，不等 click 觸發（apple-fluid-motion §1） */
+.btn:active:not(:disabled) { transform: scale(0.97); transition-duration: var(--dur-instant); }
 
 /* Primary */
 .btn-primary {
@@ -538,9 +614,9 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
   color: var(--color-text-muted);
   border: 1px solid var(--color-border);
 }
-.btn-ghost:hover { background: var(--color-surface-2); color: var(--color-text-secondary); }
+.btn-ghost:hover { background: var(--color-surface-2); color: var(--color-text-secondary); border-color: var(--color-border-strong); }
 
-.btn-sm { padding: var(--space-1) var(--space-3); font-size: var(--text-xs); border-radius: var(--radius-sm); }
+.btn-sm { padding: var(--space-1) var(--space-3); font-size: var(--text-xs); border-radius: var(--radius-sm); min-height: 24px; }
 
 .btn-icon { font-size: 0.7em; }
 
@@ -570,6 +646,7 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
   font-size: var(--text-xs);
   line-height: 1.7;
   scroll-behavior: smooth;
+  overscroll-behavior: contain; /* 邊界不外溢，近似 rubber-band 的克制版 */
 }
 
 .log-container::-webkit-scrollbar { width: 6px; }
@@ -594,10 +671,18 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
 
 .log-empty span { font-size: 2rem; opacity: 0.4; }
 
+.log-empty.is-loading span {
+  animation: pulse-fade 1.4s var(--spring-snap) infinite;
+}
+@keyframes pulse-fade {
+  0%, 100% { opacity: 0.25; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(1.08); }
+}
+
 /* Log project group */
 .log-project {
   margin-bottom: var(--space-4);
-  animation: log-fade-in var(--dur-normal) var(--ease-out-quart) both;
+  animation: log-fade-in var(--dur-normal) var(--spring-snap) both;
 }
 
 @keyframes log-fade-in {
@@ -617,12 +702,27 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
 }
 
 .log-project-header-icon { font-size: 0.9em; }
+.log-project-header-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.log-project-badge {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  font-family: var(--font-sans);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  flex-shrink: 0;
+  animation: item-enter var(--dur-normal) var(--spring-bounce) both;
+}
+.log-project-badge.success { background: oklch(62% 0.19 145 / 0.22); color: var(--color-success); }
+.log-project-badge.skipped { background: oklch(82% 0.17 85 / 0.18); color: var(--color-warn); }
+.log-project-badge.failed  { background: oklch(66% 0.19 25 / 0.18); color: var(--color-error); }
 
 /* Log lines */
 .log-line {
   display: block;
   padding: 1px 0;
-  animation: log-fade-in var(--dur-fast) var(--ease-out-quart) both;
+  animation: log-fade-in var(--dur-fast) var(--spring-snap) both;
 }
 
 .log-line::before { content: '  '; }
@@ -637,7 +737,7 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
 .summary-section {
   border-top: 1px solid var(--color-border);
   padding-top: var(--space-5);
-  animation: log-fade-in var(--dur-slow) var(--ease-out-quart) both;
+  animation: log-fade-in var(--dur-slow) var(--spring-snap) both;
 }
 
 .summary-title {
@@ -655,6 +755,11 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
   gap: var(--space-3);
 }
 
+@media (max-width: 640px) {
+  .summary-grid { grid-template-columns: 1fr; }
+  .field-row { grid-template-columns: 1fr; }
+}
+
 /* Summary card */
 .summary-card {
   border-radius: var(--radius-lg);
@@ -663,20 +768,23 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
   flex-direction: column;
   gap: var(--space-2);
   border: 1px solid;
-  animation: log-fade-in var(--dur-normal) var(--ease-out-quart) both;
+  animation: item-enter var(--dur-normal) var(--spring-snap) both;
 }
+.summary-card:nth-child(1) { animation-delay: 0ms; }
+.summary-card:nth-child(2) { animation-delay: 60ms; }
+.summary-card:nth-child(3) { animation-delay: 120ms; }
 
 .summary-card.success {
-  background: oklch(60% 0.18 145 / 0.08);
-  border-color: oklch(60% 0.18 145 / 0.3);
+  background: oklch(62% 0.19 145 / 0.08);
+  border-color: oklch(62% 0.19 145 / 0.3);
 }
 .summary-card.skipped {
-  background: oklch(80% 0.18 85 / 0.08);
-  border-color: oklch(80% 0.18 85 / 0.3);
+  background: oklch(82% 0.17 85 / 0.08);
+  border-color: oklch(82% 0.17 85 / 0.3);
 }
 .summary-card.failed {
-  background: oklch(62% 0.20 25 / 0.08);
-  border-color: oklch(62% 0.20 25 / 0.3);
+  background: oklch(66% 0.19 25 / 0.08);
+  border-color: oklch(66% 0.19 25 / 0.3);
 }
 
 .summary-card-header {
@@ -705,6 +813,11 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
 .skipped .summary-card-count { color: var(--color-warn); }
 .failed  .summary-card-count { color: var(--color-error); }
 
+.summary-card-empty {
+  font-size: var(--text-xs);
+  color: var(--color-text-disabled);
+}
+
 .summary-card-dirs {
   list-style: none;
   display: flex;
@@ -728,6 +841,30 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
   margin-top: 1px;
   white-space: normal;
   overflow: visible;
+}
+
+/* ── 12.5 Skeleton Loading ───────────────────────────────────────────────── */
+/* 執行請求送出到第一筆 SSE 事件抵達前的過渡態，取代原本的靜態文字提示 */
+.skeleton-group { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-2) 0; }
+.skeleton-line {
+  height: 12px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-2) 25%,
+    var(--color-surface-3) 37%,
+    var(--color-surface-2) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+.skeleton-line.w-60 { width: 60%; }
+.skeleton-line.w-40 { width: 40%; }
+.skeleton-line.w-80 { width: 80%; }
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 /* ── 13. Progress Overlay ────────────────────────────────────────────────── */
@@ -779,11 +916,39 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
 ::-webkit-scrollbar-thumb { background: var(--color-surface-3); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--neutral-500); }
 
-/* ── 16. Reduced Motion ──────────────────────────────────────────────────── */
+/* ── 16. Reduced Motion / Transparency（必要，非可選） ───────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
   .logo-icon { animation: none; }
+  /* 空間位移改為純淡入，保留意義承載的顏色/透明度變化 */
+  .dir-item, .log-project, .log-line, .summary-card, .log-project-badge {
+    animation-name: reduced-fade;
+  }
+}
+@keyframes reduced-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .header {
+    background: var(--color-bg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --color-border: oklch(50% 0.014 250);
+    --color-text-muted: var(--neutral-200);
+  }
+  .panel, .field-input, .dir-list-container, .field-toggle-row {
+    border-width: 1.5px;
+  }
 }

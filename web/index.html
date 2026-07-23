@@ -44,14 +44,14 @@
 
         <!-- 專案目錄 -->
         <div class="field-group">
-          <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+          <div class="field-group-header">
             <label class="field-label">
               目標專案目錄
               <span class="field-hint">點擊按鈕選取要處理的專案目錄</span>
             </label>
             <button type="button" id="add-dir-btn" class="btn btn-ghost btn-sm" aria-label="新增專案目錄">+ 新增目錄</button>
           </div>
-          
+
           <div id="project-dirs-container" class="dir-list-container" role="list">
             <div id="dir-list-empty" class="dir-empty">尚無選取的專案目錄</div>
             <!-- JS 動態插入項目 -->
@@ -163,11 +163,20 @@
         aria-live="polite"
         aria-atomic="false"
       >
-        <div class="log-empty" id="log-empty">
+        <div class="log-empty" id="log-empty" data-empty-state>
           <span aria-hidden="true">🌿</span>
           <p>執行後日誌將顯示於此</p>
         </div>
       </div>
+
+      <!-- Skeleton template：送出請求到首筆 SSE 事件抵達前顯示 -->
+      <template id="skeleton-template">
+        <div class="skeleton-group" role="status" aria-label="正在連線並準備執行">
+          <div class="skeleton-line w-40"></div>
+          <div class="skeleton-line w-80"></div>
+          <div class="skeleton-line w-60"></div>
+        </div>
+      </template>
 
       <!-- Summary cards -->
       <div id="summary-section" class="summary-section" hidden aria-labelledby="summary-title">

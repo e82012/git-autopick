@@ -14,7 +14,6 @@ const submitBtn     = document.getElementById('submit-btn');
 const submitStatus  = document.getElementById('submit-status');
 const clearBtn      = document.getElementById('clear-btn');
 const logContainer  = document.getElementById('log-container');
-const logEmpty      = document.getElementById('log-empty');
 const summarySection= document.getElementById('summary-section');
 const summaryGrid   = document.getElementById('summary-grid');
 const statusDot     = document.getElementById('status-dot');
@@ -64,11 +63,15 @@ function renderDirList() {
       removeBtn.type = 'button';
       removeBtn.className = 'dir-item-remove';
       removeBtn.innerHTML = '✕';
-      removeBtn.setAttribute('aria-label', '移除此目錄');
+      removeBtn.setAttribute('aria-label', `移除目錄：${dir}`);
       removeBtn.onclick = () => {
-        selectedDirs.splice(index, 1);
-        renderDirList();
-        validateField('projectDirs');
+        // 先播放離場動效，動畫結束後才真正從資料移除（避免瞬間消失）
+        item.classList.add('is-leaving');
+        item.addEventListener('animationend', () => {
+          selectedDirs.splice(index, 1);
+          renderDirList();
+          validateField('projectDirs');
+        }, { once: true });
       };
 
       item.appendChild(pathSpan);
@@ -142,9 +145,9 @@ function validateField(name) {
   const msg = validators[name](val);
   errors[name].textContent = msg;
   if (fields[name]) {
-    fields[name].style.borderColor = msg ? 'var(--color-error)' : '';
+    fields[name].classList.toggle('is-invalid', Boolean(msg));
   } else if (name === 'projectDirs') {
-    projectDirsContainer.style.borderColor = msg ? 'var(--color-error)' : '';
+    projectDirsContainer.classList.toggle('is-invalid', Boolean(msg));
   }
   return !msg;
 }
@@ -170,7 +173,8 @@ let projectGroups = {};  // dir → DOM element
 function ensureProjectGroup(dir) {
   if (projectGroups[dir]) return projectGroups[dir];
 
-  if (logEmpty) logEmpty.remove();
+  logContainer.querySelector('[data-empty-state]')?.remove();
+  logContainer.querySelector('.skeleton-group')?.remove();
 
   const group = document.createElement('div');
   group.className = 'log-project';
@@ -238,7 +242,7 @@ function renderSummary(summary) {
             </li>
           `).join('')}
         </ul>`
-      : `<p style="font-size:var(--text-xs);color:var(--color-text-disabled)">無</p>`;
+      : `<p class="summary-card-empty">無</p>`;
 
     el.innerHTML = `
       <div class="summary-card-header">
@@ -253,6 +257,8 @@ function renderSummary(summary) {
 }
 
 // ── 執行流程 ──────────────────────────────────────────────────────────────
+const skeletonTemplate = document.getElementById('skeleton-template');
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!validateAll()) return;
@@ -263,12 +269,10 @@ form.addEventListener('submit', async (e) => {
   summarySection.hidden = true;
   summaryGrid.innerHTML  = '';
 
-  // 加入空狀態 placeholder（保持高度）
-  const emptyPlaceholder = document.createElement('div');
-  emptyPlaceholder.id = 'log-empty';
-  emptyPlaceholder.className = 'log-empty';
-  emptyPlaceholder.innerHTML = `<span aria-hidden="true">⏳</span><p>正在執行...</p>`;
-  logContainer.appendChild(emptyPlaceholder);
+  // 送出請求到首筆 SSE 事件抵達前，顯示 skeleton 取代靜態文字（apple-fluid-motion §14：loading 動畫保留，僅移除空間位移）
+  const skeletonNode = skeletonTemplate.content.cloneNode(true);
+  logContainer.appendChild(skeletonNode);
+  const skeletonEl = logContainer.querySelector('.skeleton-group');
 
   const isDryRun   = document.getElementById('dry-run').checked;
   const payload = {
@@ -299,8 +303,8 @@ form.addEventListener('submit', async (e) => {
     const decoder = new TextDecoder();
     let buffer = '';
 
-    // 移除執行中 placeholder
-    emptyPlaceholder.remove();
+    // 移除 skeleton
+    skeletonEl?.remove();
 
     while (true) {
       const { value, done } = await reader.read();
@@ -345,28 +349,10 @@ function handleSSEEvent(event, data) {
       if (group) {
         const header = group.querySelector('.log-project-header');
         if (header) {
+          const badgeText = { success: '成功', skipped: '跳過', failed: '失敗' }[data.status] || data.status;
           const badge = document.createElement('span');
-          badge.style.cssText = `
-            margin-left:auto;
-            font-size:var(--text-xs);
-            font-family:var(--font-sans);
-            padding:1px 6px;
-            border-radius:4px;
-            font-weight:600;
-          `;
-          if (data.status === 'success') {
-            badge.textContent = '成功';
-            badge.style.background = 'oklch(60% 0.18 145 / 0.25)';
-            badge.style.color = 'var(--color-success)';
-          } else if (data.status === 'skipped') {
-            badge.textContent = '跳過';
-            badge.style.background = 'oklch(80% 0.18 85 / 0.20)';
-            badge.style.color = 'var(--color-warn)';
-          } else {
-            badge.textContent = '失敗';
-            badge.style.background = 'oklch(62% 0.20 25 / 0.20)';
-            badge.style.color = 'var(--color-error)';
-          }
+          badge.className = `log-project-badge ${data.status}`;
+          badge.textContent = badgeText;
           header.appendChild(badge);
         }
       }
@@ -414,6 +400,7 @@ clearBtn.addEventListener('click', () => {
   const emptyEl = document.createElement('div');
   emptyEl.id = 'log-empty';
   emptyEl.className = 'log-empty';
+  emptyEl.dataset.emptyState = '';
   emptyEl.innerHTML = `<span aria-hidden="true">🌿</span><p>執行後日誌將顯示於此</p>`;
   logContainer.appendChild(emptyEl);
 });
