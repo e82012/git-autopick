@@ -111,6 +111,26 @@
           <span class="field-error" id="commit-error" role="alert" aria-live="polite"></span>
         </div>
 
+        <!-- 並發數量 (Concurrency) -->
+        <div class="field-group">
+          <label class="field-label" for="concurrency">
+            並發數量
+            <span class="field-hint">同時執行的專案數（預設 3，範圍 1~10）</span>
+          </label>
+          <input
+            type="number"
+            id="concurrency"
+            name="concurrency"
+            class="field-input"
+            value="3"
+            min="1"
+            max="10"
+            placeholder="3"
+            aria-describedby="concurrency-error"
+          />
+          <span class="field-error" id="concurrency-error" role="alert" aria-live="polite"></span>
+        </div>
+
         <!-- Dry-run toggle -->
         <div class="field-toggle-row">
           <label class="toggle-label" for="dry-run">

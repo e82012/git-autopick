@@ -24,6 +24,7 @@ const fields = {
   branch:      document.getElementById('branch'),
   remote:      document.getElementById('remote'),
   commit:      document.getElementById('commit'),
+  concurrency: document.getElementById('concurrency'),
 };
 
 const errors = {
@@ -31,6 +32,7 @@ const errors = {
   branch:      document.getElementById('branch-error'),
   remote:      document.getElementById('remote-error'),
   commit:      document.getElementById('commit-error'),
+  concurrency: document.getElementById('concurrency-error'),
 };
 
 const addDirBtn          = document.getElementById('add-dir-btn');
@@ -135,6 +137,13 @@ const validators = {
   commit(val) {
     if (!val.trim()) return '請輸入 commit hash';
     if (!/^[0-9a-f]{7,40}$/i.test(val.trim())) return 'commit hash 格式不正確（需 7~40 位 hex）';
+    return '';
+  },
+  concurrency(val) {
+    const num = Number(val);
+    if (!val || isNaN(num) || !Number.isInteger(num) || num < 1 || num > 10) {
+      return '請輸入 1 至 10 之間的整數';
+    }
     return '';
   },
 };
@@ -277,9 +286,10 @@ form.addEventListener('submit', async (e) => {
   const isDryRun   = document.getElementById('dry-run').checked;
   const payload = {
     projectDirs: selectedDirs,
-    branch:    fields.branch.value.trim(),
-    remote:    fields.remote.value.trim(),
-    commit:    fields.commit.value.trim(),
+    branch:      fields.branch.value.trim(),
+    remote:      fields.remote.value.trim(),
+    commit:      fields.commit.value.trim(),
+    concurrency: Number(fields.concurrency.value) || 3,
     isDryRun,
   };
 

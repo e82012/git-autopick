@@ -55,12 +55,16 @@ app.get('/api/select-folder', (req, res) => {
 // ── SSE 執行端點 ───────────────────────────────────────────────────────────
 // 接收 POST body，以 SSE 方式串流 log 給前端，最後送出 summary 事件
 app.post('/api/run', async (req, res) => {
-  const { projectDirs, branch, remote, commit, isDryRun } = req.body;
+  const { projectDirs, branch, remote, commit, isDryRun, concurrency: rawConcurrency } = req.body;
 
   // 基本驗證
   if (!Array.isArray(projectDirs) || !projectDirs.length || !branch || !remote || !commit) {
     return res.status(400).json({ error: '缺少必要參數' });
   }
+
+  // 去重防護：避免相同目錄並發操作造成 Git lock 競爭
+  const uniqueDirs = Array.from(new Set(projectDirs.map(d => path.normalize(d.trim()))));
+  const concurrency = Math.max(1, Math.min(Number(rawConcurrency) || 3, 10));
 
   // 設定 SSE header
   res.setHeader('Content-Type', 'text/event-stream');
@@ -79,30 +83,39 @@ app.post('/api/run', async (req, res) => {
   emitter.on('log', (entry) => send('log', entry));
 
   const results = [];
+  const queue = [...uniqueDirs];
 
-  for (const dir of projectDirs) {
-    send('project-start', { dir });
+  // Worker 函式：從佇列持續取出專案執行
+  const worker = async () => {
+    while (queue.length > 0) {
+      const dir = queue.shift();
+      send('project-start', { dir });
 
-    let flowResult;
-    try {
-      flowResult = await runCherryPickFlow({
-        projectDir: dir,
-        branch,
-        remote,
-        commit,
-        isDryRun: isDryRun === true,
-        emitter,           // 傳入 emitter，讓 flow 推送即時 log
-      });
-    } catch (err) {
-      flowResult = {
-        status: STATUS.FAILED,
-        reason: `未預期錯誤：${err.message}`,
-      };
+      let flowResult;
+      try {
+        flowResult = await runCherryPickFlow({
+          projectDir: dir,
+          branch,
+          remote,
+          commit,
+          isDryRun: isDryRun === true,
+          emitter, // 傳入 emitter，讓 flow 推送即時 log
+        });
+      } catch (err) {
+        flowResult = {
+          status: STATUS.FAILED,
+          reason: `未預期錯誤：${err.message}`,
+        };
+      }
+
+      results.push({ dir, ...flowResult });
+      send('project-done', { dir, ...flowResult });
     }
+  };
 
-    results.push({ dir, ...flowResult });
-    send('project-done', { dir, ...flowResult });
-  }
+  // 依並發數啟動 Workers
+  const workerCount = Math.min(concurrency, uniqueDirs.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
   // 全部執行完成，送出摘要
   const summary = {

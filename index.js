@@ -36,14 +36,15 @@ async function main() {
   }
 
   const { projectDirs, branch, remote, commit } = inputs;
+  const uniqueDirs = Array.from(new Set(projectDirs));
 
   // 2. 輸出執行前確認資訊
-  printPlan({ projectDirs, branch, remote, commit, isDryRun });
+  printPlan({ projectDirs: uniqueDirs, branch, remote, commit, isDryRun });
 
   // 3. 逐一對每個專案執行 cherry-pick 流程
   const results = [];
 
-  for (const dir of projectDirs) {
+  for (const dir of uniqueDirs) {
     console.log(chalk.bold(`\n📁 處理：${dir}`));
 
     let flowResult;
