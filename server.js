@@ -10,9 +10,9 @@
 
 import express from 'express';
 import { EventEmitter } from 'events';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { spawn } from 'child_process';
 import { runCherryPickFlow, STATUS } from './src/cherryPickFlow.js';
 import { isProtectedBranch, DEFAULT_PROTECTED_BRANCHES } from './src/gitRunner.js';
 import { detectGhCli } from './src/prProvider.js';
@@ -39,31 +39,90 @@ app.get('/api/capabilities', async (_req, res) => {
   });
 });
 
-// ── 目錄選取端點 ──────────────────────────────────────────────────────────
-app.get('/api/select-folder', (req, res) => {
-  const psScript = `
-    Add-Type -AssemblyName PresentationFramework
-    $dlg = New-Object Microsoft.Win32.OpenFileDialog
-    $dlg.Title = "請進入專案目錄後，點擊右下角『開啟』"
-    $dlg.FileName = "選擇目前的資料夾"
-    $dlg.Filter = "資料夾|*.directory_selection_placeholder"
-    $dlg.CheckFileExists = $false
-    $dlg.CheckPathExists = $true
-    $dlg.ValidateNames = $false
-    if ($dlg.ShowDialog() -eq $true) {
-        Write-Output (Split-Path $dlg.FileName)
-    }
-  `;
-  const child = spawn('powershell.exe', ['-NoProfile', '-Command', psScript]);
-  let output = '';
+// ── 目錄瀏覽端點 ──────────────────────────────────────────────────────────
+// 取代原生彈窗：由 server 列舉檔案系統，前端以瀏覽器內 modal 呈現。
+// 之所以走後端，是因為瀏覽器沙箱拿不到資料夾的絕對路徑，而本工具需要
+// 絕對路徑作為 git 的 cwd。純 localhost、操作使用者自己的機器，無額外對外暴露。
+const IS_WIN = process.platform === 'win32';
 
-  child.stdout.on('data', (data) => {
-    output += data.toString();
-  });
+/** 列舉 Windows 磁碟機（探測 A~Z 是否存在） */
+function listDrives() {
+  if (!IS_WIN) return ['/'];
+  const drives = [];
+  for (let c = 65; c <= 90; c++) {
+    const d = `${String.fromCharCode(c)}:\\`;
+    try { if (fs.existsSync(d)) drives.push(d); } catch { /* 略過無法存取的磁碟 */ }
+  }
+  return drives;
+}
 
-  child.on('close', () => {
-    const p = output.trim();
-    res.json({ path: p || null });
+/** 判斷資料夾是否為 git repo（.git 可能是目錄，submodule 情況下為檔案） */
+function isGitRepo(dir) {
+  try { return fs.existsSync(path.join(dir, '.git')); } catch { return false; }
+}
+
+/** 由絕對路徑組出麵包屑片段（根 → 各層） */
+function buildSegments(target) {
+  const root = path.parse(target).root;          // 例：D:\
+  const rest = target.slice(root.length).split(path.sep).filter(Boolean);
+  const segments = [{ name: root, path: root }];
+  let acc = root;
+  for (const part of rest) {
+    acc = path.join(acc, part);
+    segments.push({ name: part, path: acc });
+  }
+  return segments;
+}
+
+app.get('/api/fs', (req, res) => {
+  const raw = String(req.query.path || '').trim();
+
+  // roots 視圖：未指定路徑時，Windows 回磁碟機清單作為起點
+  if (!raw && IS_WIN) {
+    const drives = listDrives();
+    return res.json({
+      path: null, isRoot: true, parent: null, atDriveRoot: false,
+      segments: [], drives,
+      entries: drives.map((d) => ({ name: d, path: d, isGit: false })),
+      currentIsGit: false,
+    });
+  }
+
+  let target;
+  try {
+    target = path.resolve(raw || '/');
+  } catch {
+    return res.status(400).json({ error: '路徑無效' });
+  }
+
+  let dirents;
+  try {
+    dirents = fs.readdirSync(target, { withFileTypes: true });
+  } catch (err) {
+    return res.status(400).json({ error: `無法讀取目錄（${err.code || err.message}）` });
+  }
+
+  const entries = dirents
+    .filter((d) => { try { return d.isDirectory(); } catch { return false; } })
+    .map((d) => {
+      const full = path.join(target, d.name);
+      return { name: d.name, path: full, isGit: isGitRepo(full) };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant', { sensitivity: 'base' }));
+
+  const atDriveRoot = target === path.parse(target).root;
+  // parent 為 null 代表上一層是磁碟機清單（僅 Windows 於磁碟根時成立）
+  const parent = atDriveRoot ? (IS_WIN ? null : null) : path.dirname(target);
+
+  res.json({
+    path: target,
+    isRoot: false,
+    parent,
+    atDriveRoot,
+    segments: buildSegments(target),
+    drives: listDrives(),
+    entries,
+    currentIsGit: isGitRepo(target),
   });
 });
 

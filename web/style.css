@@ -1170,3 +1170,222 @@ select.field-input {
     border-width: 1.5px;
   }
 }
+
+/* ── 目錄選擇 Modal ─────────────────────────────────────────────── */
+body.modal-open { overflow: hidden; }
+
+.fs-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+.fs-modal[hidden] { display: none; }
+
+.fs-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: oklch(0% 0 0 / 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fs-fade-in var(--dur-normal) var(--spring-snap);
+}
+
+.fs-modal-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 100%);
+  max-height: min(78vh, 720px);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: fs-pop-in var(--dur-normal) var(--spring-snap);
+}
+
+@keyframes fs-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fs-pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+.fs-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+.fs-modal-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.fs-modal-close {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-lg);
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm, 6px);
+  transition: color var(--dur-fast, 0.15s) ease, background var(--dur-fast, 0.15s) ease;
+}
+.fs-modal-close:hover { color: var(--color-text-primary); background: var(--color-surface-2); }
+
+.fs-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+}
+.fs-path-input {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.fs-toolbar .btn { flex-shrink: 0; white-space: nowrap; }
+
+.fs-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 0 var(--space-5) var(--space-3);
+}
+.fs-crumb {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm, 6px);
+  transition: background var(--dur-fast, 0.15s) ease, color var(--dur-fast, 0.15s) ease;
+}
+.fs-crumb:hover { background: var(--color-surface-2); color: var(--color-primary); }
+.fs-crumb-sep { color: var(--color-text-muted); font-size: var(--text-xs); }
+
+.fs-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-3);
+  margin: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  min-height: 180px;
+}
+.fs-list:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+.fs-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-md);
+  transition: background var(--dur-fast, 0.15s) ease;
+}
+.fs-item:hover { background: var(--color-surface-2); }
+
+.fs-item-nav {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+}
+.fs-item-icon { flex-shrink: 0; }
+.fs-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fs-item.is-git .fs-item-name { color: var(--color-text-primary); font-weight: 500; }
+.fs-item-tag {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--color-success, #4ade80);
+  border: 1px solid var(--color-success, #4ade80);
+  border-radius: var(--radius-full, 999px);
+  padding: 0 6px;
+  opacity: 0.85;
+}
+
+.fs-item-add {
+  flex-shrink: 0;
+  margin-right: var(--space-2);
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm, 6px);
+  transition: background var(--dur-fast, 0.15s) ease, color var(--dur-fast, 0.15s) ease, border-color var(--dur-fast, 0.15s) ease;
+}
+.fs-item-add:hover:not(:disabled) {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+.fs-item-add.is-added {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-success, #4ade80);
+  cursor: default;
+}
+
+.fs-loading, .fs-error, .fs-empty {
+  padding: var(--space-6);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.fs-error { color: var(--color-error, #f87171); }
+
+.fs-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--color-border);
+}
+.fs-current {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fs-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fs-modal-backdrop, .fs-modal-panel { animation: none; }
+}

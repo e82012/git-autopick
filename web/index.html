@@ -348,6 +348,47 @@
     <div class="progress-pulse" aria-hidden="true"></div>
   </div>
 
+  <!-- ── 目錄選擇 Modal ───────────────────────────────────────────── -->
+  <div id="fs-modal" class="fs-modal" hidden>
+    <div class="fs-modal-backdrop" data-fs-close></div>
+    <div class="fs-modal-panel" role="dialog" aria-modal="true" aria-labelledby="fs-modal-title">
+      <div class="fs-modal-header">
+        <h2 id="fs-modal-title" class="fs-modal-title">
+          <span aria-hidden="true">📂</span> 選擇專案目錄
+        </h2>
+        <button type="button" class="fs-modal-close" data-fs-close aria-label="關閉">✕</button>
+      </div>
+
+      <!-- 路徑輸入：可直接貼上絕對路徑，Enter 前往 -->
+      <div class="fs-toolbar">
+        <button type="button" id="fs-up" class="btn btn-ghost btn-sm" aria-label="上一層">↑ 上一層</button>
+        <input
+          type="text"
+          id="fs-path-input"
+          class="field-input fs-path-input"
+          placeholder="貼上或輸入絕對路徑，按 Enter 前往"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button type="button" id="fs-go" class="btn btn-ghost btn-sm">前往</button>
+      </div>
+
+      <!-- 麵包屑 -->
+      <div class="fs-breadcrumb" id="fs-breadcrumb" aria-label="路徑導覽"></div>
+
+      <!-- 資料夾清單 -->
+      <div class="fs-list" id="fs-list" role="listbox" aria-label="子資料夾" tabindex="0"></div>
+
+      <div class="fs-modal-footer">
+        <span class="fs-current" id="fs-current" title=""></span>
+        <div class="fs-footer-actions">
+          <button type="button" id="fs-add-current" class="btn btn-ghost btn-sm">＋ 加入目前資料夾</button>
+          <button type="button" id="fs-done" class="btn btn-primary btn-sm">完成</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js" type="module"></script>
 </body>
 </html>

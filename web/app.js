@@ -119,26 +119,195 @@ function renderDirList() {
   }
 }
 
-addDirBtn.addEventListener('click', async () => {
-  addDirBtn.disabled = true;
-  addDirBtn.textContent = '選取中...';
+/**
+ * 新增一個目錄到清單（去重）。供 modal 的多個入口共用。
+ * @returns {boolean} 是否實際新增（重複則回 false）
+ */
+function addDir(dirPath) {
+  const p = String(dirPath || '').trim();
+  if (!p || selectedDirs.includes(p)) return false;
+  selectedDirs.push(p);
+  renderDirList();
+  validateField('projectDirs');
+  updateProtectedWarning();
+  return true;
+}
+
+// 點「新增目錄」開啟瀏覽器內的目錄選擇 modal（取代原生彈窗，見 server.js /api/fs）
+addDirBtn.addEventListener('click', () => openFsModal());
+
+// ── 目錄選擇 Modal ─────────────────────────────────────────────────────────
+const fsModal        = document.getElementById('fs-modal');
+const fsList         = document.getElementById('fs-list');
+const fsBreadcrumb   = document.getElementById('fs-breadcrumb');
+const fsPathInput    = document.getElementById('fs-path-input');
+const fsCurrent      = document.getElementById('fs-current');
+const fsUpBtn        = document.getElementById('fs-up');
+const fsGoBtn        = document.getElementById('fs-go');
+const fsAddCurrentBtn= document.getElementById('fs-add-current');
+const fsDoneBtn      = document.getElementById('fs-done');
+
+const LAST_PATH_KEY = 'gap:lastFsPath';
+// 目前 modal 所在位置：null 代表磁碟機清單（roots）
+let fsView = { path: null, parent: null, atDriveRoot: false };
+
+function openFsModal() {
+  fsModal.hidden = false;
+  document.body.classList.add('modal-open');
+  let start = null;
+  try { start = localStorage.getItem(LAST_PATH_KEY); } catch { /* 私密視窗等情境讀取失敗，用預設 */ }
+  loadFsPath(start);
+  // 讓鍵盤使用者可直接打路徑
+  setTimeout(() => fsPathInput.focus(), 0);
+}
+
+function closeFsModal() {
+  fsModal.hidden = true;
+  document.body.classList.remove('modal-open');
+}
+
+/** 讀取並渲染某路徑（path 為 null 時取 roots 磁碟機清單） */
+async function loadFsPath(targetPath) {
+  fsList.innerHTML = '<div class="fs-loading">讀取中…</div>';
   try {
-    const res = await fetch('/api/select-folder');
-    if (res.ok) {
-      const data = await res.json();
-      if (data.path && !selectedDirs.includes(data.path)) {
-        selectedDirs.push(data.path);
-        renderDirList();
-        validateField('projectDirs');
-        updateProtectedWarning();
-      }
+    const url = targetPath ? `/api/fs?path=${encodeURIComponent(targetPath)}` : '/api/fs';
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!res.ok) {
+      fsList.innerHTML = `<div class="fs-error">${escapeHtml(data.error || '無法讀取此路徑')}</div>`;
+      return;
     }
+
+    fsView = { path: data.path, parent: data.parent, atDriveRoot: data.atDriveRoot };
+    fsPathInput.value = data.path || '';
+    fsUpBtn.disabled = data.isRoot;   // 已在磁碟機清單就沒有上一層
+    renderBreadcrumb(data);
+    renderFsList(data);
+    renderFsCurrent(data);
+
+    if (data.path) { try { localStorage.setItem(LAST_PATH_KEY, data.path); } catch { /* 忽略寫入失敗 */ } }
   } catch (err) {
-    console.error('選取目錄失敗', err);
-  } finally {
-    addDirBtn.disabled = false;
-    addDirBtn.textContent = '+ 新增目錄';
+    fsList.innerHTML = `<div class="fs-error">連線失敗：${escapeHtml(err.message)}</div>`;
   }
+}
+
+function renderBreadcrumb(data) {
+  fsBreadcrumb.innerHTML = '';
+
+  // roots 入口（磁碟機清單）
+  const rootCrumb = document.createElement('button');
+  rootCrumb.type = 'button';
+  rootCrumb.className = 'fs-crumb';
+  rootCrumb.textContent = '💽 磁碟';
+  rootCrumb.onclick = () => loadFsPath(null);
+  fsBreadcrumb.appendChild(rootCrumb);
+
+  (data.segments || []).forEach((seg) => {
+    const sep = document.createElement('span');
+    sep.className = 'fs-crumb-sep';
+    sep.textContent = '›';
+    fsBreadcrumb.appendChild(sep);
+
+    const crumb = document.createElement('button');
+    crumb.type = 'button';
+    crumb.className = 'fs-crumb';
+    crumb.textContent = seg.name;
+    crumb.title = seg.path;
+    crumb.onclick = () => loadFsPath(seg.path);
+    fsBreadcrumb.appendChild(crumb);
+  });
+}
+
+function renderFsList(data) {
+  fsList.innerHTML = '';
+  const entries = data.entries || [];
+
+  if (!entries.length) {
+    fsList.innerHTML = '<div class="fs-empty">此資料夾沒有子目錄</div>';
+    return;
+  }
+
+  const isDrivesView = data.isRoot;
+  for (const entry of entries) {
+    const row = document.createElement('div');
+    row.className = 'fs-item';
+    if (entry.isGit) row.classList.add('is-git');
+
+    // 名稱區：點擊進入該資料夾
+    const nav = document.createElement('button');
+    nav.type = 'button';
+    nav.className = 'fs-item-nav';
+    nav.title = entry.path;
+    const icon = isDrivesView ? '💽' : (entry.isGit ? '🌿' : '📁');
+    nav.innerHTML =
+      `<span class="fs-item-icon" aria-hidden="true">${icon}</span>` +
+      `<span class="fs-item-name">${escapeHtml(entry.name)}</span>` +
+      (entry.isGit ? '<span class="fs-item-tag">git</span>' : '');
+    nav.onclick = () => loadFsPath(entry.path);
+    row.appendChild(nav);
+
+    // 磁碟機列不提供「加入」（通常不會把整顆磁碟當專案）
+    if (!isDrivesView) {
+      const added = selectedDirs.includes(entry.path);
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'fs-item-add' + (added ? ' is-added' : '');
+      addBtn.textContent = added ? '✓ 已加入' : '＋ 加入';
+      addBtn.disabled = added;
+      addBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (addDir(entry.path)) {
+          addBtn.textContent = '✓ 已加入';
+          addBtn.classList.add('is-added');
+          addBtn.disabled = true;
+        }
+      };
+      row.appendChild(addBtn);
+    }
+
+    fsList.appendChild(row);
+  }
+}
+
+function renderFsCurrent(data) {
+  if (data.path) {
+    fsCurrent.textContent = `目前：${data.path}${data.currentIsGit ? '  🌿 git repo' : ''}`;
+    fsCurrent.title = data.path;
+    const already = selectedDirs.includes(data.path);
+    fsAddCurrentBtn.disabled = already;
+    fsAddCurrentBtn.textContent = already ? '✓ 已加入目前資料夾' : '＋ 加入目前資料夾';
+  } else {
+    fsCurrent.textContent = '請選擇磁碟機';
+    fsCurrent.title = '';
+    fsAddCurrentBtn.disabled = true;
+    fsAddCurrentBtn.textContent = '＋ 加入目前資料夾';
+  }
+}
+
+// 導覽動作
+fsUpBtn.addEventListener('click', () => {
+  // parent 為 null 時（磁碟根）回磁碟機清單
+  loadFsPath(fsView.atDriveRoot ? null : fsView.parent);
+});
+fsGoBtn.addEventListener('click', () => loadFsPath(fsPathInput.value.trim() || null));
+fsPathInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); loadFsPath(fsPathInput.value.trim() || null); }
+});
+
+fsAddCurrentBtn.addEventListener('click', () => {
+  if (fsView.path && addDir(fsView.path)) {
+    fsAddCurrentBtn.disabled = true;
+    fsAddCurrentBtn.textContent = '✓ 已加入目前資料夾';
+  }
+});
+
+fsDoneBtn.addEventListener('click', closeFsModal);
+
+// 關閉：✕、背景、Esc
+fsModal.querySelectorAll('[data-fs-close]').forEach((el) => el.addEventListener('click', closeFsModal));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !fsModal.hidden) closeFsModal();
 });
 
 // ── 連線狀態與能力查詢 ─────────────────────────────────────────────────────
