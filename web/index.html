@@ -62,14 +62,14 @@
         <!-- 目標分支 -->
         <div class="field-row">
           <div class="field-group">
-            <label class="field-label" for="branch">目標分支</label>
+            <label class="field-label" for="branch">工作分支</label>
             <input
               type="text"
               id="branch"
               name="branch"
               class="field-input"
               value="main"
-              placeholder="develop"
+              placeholder="feat/my-change"
               aria-describedby="branch-error"
               autocomplete="off"
               spellcheck="false"
@@ -109,6 +109,126 @@
             maxlength="40"
           />
           <span class="field-error" id="commit-error" role="alert" aria-live="polite"></span>
+        </div>
+
+        <!-- 推送 Remote（兩種模式皆使用） -->
+        <div class="field-group">
+          <label class="field-label" for="push-remote">
+            推送 Remote
+            <span class="field-hint">工作分支推送的目的地（預設 origin）</span>
+          </label>
+          <input
+            type="text"
+            id="push-remote"
+            name="pushRemote"
+            class="field-input"
+            value="origin"
+            placeholder="origin"
+            aria-describedby="push-remote-error"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <span class="field-error" id="push-remote-error" role="alert" aria-live="polite"></span>
+        </div>
+
+        <!-- PR 模式 -->
+        <div class="field-toggle-row">
+          <label class="toggle-label" for="pr-mode">
+            <input type="checkbox" id="pr-mode" class="toggle-input" />
+            <span class="toggle-track" aria-hidden="true">
+              <span class="toggle-thumb"></span>
+            </span>
+            <span class="toggle-text">
+              PR 模式 <em>（推送至工作分支並開立 Pull Request）</em>
+            </span>
+          </label>
+        </div>
+
+        <div id="pr-settings" class="pr-settings" hidden>
+          <p class="pr-track-hint" id="pr-track-hint">正在確認 PR 建立方式…</p>
+
+          <div class="field-group">
+            <label class="field-label" for="target-branch">
+              合併目標分支
+              <span class="field-hint">新分支的切出基準，同時作為 PR 的 base</span>
+            </label>
+            <input
+              type="text"
+              id="target-branch"
+              name="targetBranch"
+              class="field-input"
+              value="main"
+              placeholder="main"
+              aria-describedby="target-branch-error"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <span class="field-error" id="target-branch-error" role="alert" aria-live="polite"></span>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="pr-title">
+              PR 標題
+              <span class="field-hint">留空時自動取用該 commit 的訊息標題</span>
+            </label>
+            <input
+              type="text"
+              id="pr-title"
+              name="prTitle"
+              class="field-input"
+              placeholder="（自動）"
+              autocomplete="off"
+              maxlength="255"
+            />
+          </div>
+
+          <!-- 自動合併：適用於「主線僅禁止直推、不要求審核核准」的專案 -->
+          <div class="field-toggle-row field-toggle-nested">
+            <label class="toggle-label" for="auto-merge">
+              <input type="checkbox" id="auto-merge" class="toggle-input" />
+              <span class="toggle-track" aria-hidden="true">
+                <span class="toggle-thumb"></span>
+              </span>
+              <span class="toggle-text">
+                建立後自動合併 <em>（需 gh CLI，且該分支不要求審核核准）</em>
+              </span>
+            </label>
+          </div>
+
+          <!-- 明說「關閉時會停在哪一步」，否則看不出 PR 究竟有沒有被建立 -->
+          <p class="merge-state-hint" id="merge-state-hint"></p>
+
+          <div id="merge-settings" class="merge-settings" hidden>
+            <div class="field-group">
+              <label class="field-label" for="merge-method">合併方式</label>
+              <select id="merge-method" name="mergeMethod" class="field-input">
+                <option value="squash" selected>Squash and merge</option>
+                <option value="merge">Create a merge commit</option>
+                <option value="rebase">Rebase and merge</option>
+              </select>
+            </div>
+
+            <label class="checkbox-label" for="delete-branch-on-merge">
+              <input type="checkbox" id="delete-branch-on-merge" checked />
+              <span>合併後刪除工作分支（遠端與本地）</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 高風險分支確認卡：直推模式下工作分支命中名單時顯示 -->
+        <div id="protected-warning" class="protected-warning" hidden role="alert">
+          <p class="protected-warning-title">
+            <span aria-hidden="true">⚠️</span>
+            即將直接推送 <code id="protected-branch-name"></code> 至以下 <span id="protected-dir-count">0</span> 個專案：
+          </p>
+          <ul class="protected-warning-dirs" id="protected-dir-list"></ul>
+          <p class="protected-warning-note">
+            推送後若需退回，僅能以 <code>git revert</code> 產生反向提交——本工具不使用強制推送。
+          </p>
+          <label class="checkbox-label" for="confirm-protected">
+            <input type="checkbox" id="confirm-protected" />
+            <span>我確認要直接推送</span>
+          </label>
         </div>
 
         <!-- 並發數量 (Concurrency) -->
