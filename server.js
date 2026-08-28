@@ -45,20 +45,23 @@ app.get('/api/capabilities', async (_req, res) => {
 // 絕對路徑作為 git 的 cwd。純 localhost、操作使用者自己的機器，無額外對外暴露。
 const IS_WIN = process.platform === 'win32';
 
+/** 路徑是否存在（非阻塞） */
+async function pathExists(p) {
+  try { await fs.promises.access(p); return true; } catch { return false; }
+}
+
 /** 列舉 Windows 磁碟機（探測 A~Z 是否存在） */
-function listDrives() {
+async function listDrives() {
   if (!IS_WIN) return ['/'];
-  const drives = [];
-  for (let c = 65; c <= 90; c++) {
-    const d = `${String.fromCharCode(c)}:\\`;
-    try { if (fs.existsSync(d)) drives.push(d); } catch { /* 略過無法存取的磁碟 */ }
-  }
-  return drives;
+  const letters = [];
+  for (let c = 65; c <= 90; c++) letters.push(`${String.fromCharCode(c)}:\\`);
+  const present = await Promise.all(letters.map(pathExists));
+  return letters.filter((_, i) => present[i]);
 }
 
 /** 判斷資料夾是否為 git repo（.git 可能是目錄，submodule 情況下為檔案） */
 function isGitRepo(dir) {
-  try { return fs.existsSync(path.join(dir, '.git')); } catch { return false; }
+  return pathExists(path.join(dir, '.git'));
 }
 
 /** 由絕對路徑組出麵包屑片段（根 → 各層） */
@@ -74,12 +77,14 @@ function buildSegments(target) {
   return segments;
 }
 
-app.get('/api/fs', (req, res) => {
+// 全程使用非阻塞 fs：逛到超大目錄（如 node_modules、C:\Windows\WinSxS）時，
+// 目錄讀取與逐項 .git 探測都不會卡住事件迴圈，其他請求（含進行中的 SSE）照常回應。
+app.get('/api/fs', async (req, res) => {
   const raw = String(req.query.path || '').trim();
 
   // roots 視圖：未指定路徑時，Windows 回磁碟機清單作為起點
   if (!raw && IS_WIN) {
-    const drives = listDrives();
+    const drives = await listDrives();
     return res.json({
       path: null, isRoot: true, parent: null, atDriveRoot: false,
       segments: [], drives,
@@ -97,22 +102,23 @@ app.get('/api/fs', (req, res) => {
 
   let dirents;
   try {
-    dirents = fs.readdirSync(target, { withFileTypes: true });
+    dirents = await fs.promises.readdir(target, { withFileTypes: true });
   } catch (err) {
     return res.status(400).json({ error: `無法讀取目錄（${err.code || err.message}）` });
   }
 
-  const entries = dirents
+  // 先算出全部子目錄的完整路徑，再並行探測 git 標記，避免重複組路徑
+  const items = dirents
     .filter((d) => { try { return d.isDirectory(); } catch { return false; } })
-    .map((d) => {
-      const full = path.join(target, d.name);
-      return { name: d.name, path: full, isGit: isGitRepo(full) };
-    })
+    .map((d) => ({ name: d.name, path: path.join(target, d.name) }));
+  const gitFlags = await Promise.all(items.map((it) => isGitRepo(it.path)));
+  const entries = items
+    .map((it, i) => ({ ...it, isGit: gitFlags[i] }))
     .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant', { sensitivity: 'base' }));
 
   const atDriveRoot = target === path.parse(target).root;
-  // parent 為 null 代表上一層是磁碟機清單（僅 Windows 於磁碟根時成立）
-  const parent = atDriveRoot ? (IS_WIN ? null : null) : path.dirname(target);
+  // parent 為 null 代表上一層是磁碟機清單
+  const parent = atDriveRoot ? null : path.dirname(target);
 
   res.json({
     path: target,
@@ -120,9 +126,9 @@ app.get('/api/fs', (req, res) => {
     parent,
     atDriveRoot,
     segments: buildSegments(target),
-    drives: listDrives(),
+    drives: await listDrives(),
     entries,
-    currentIsGit: isGitRepo(target),
+    currentIsGit: await isGitRepo(target),
   });
 });
 
@@ -275,7 +281,9 @@ app.post('/api/run', async (req, res) => {
 });
 
 // ── 啟動 ──────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+// 僅綁定 127.0.0.1：本工具會執行 git 操作並列舉檔案系統，這些介面無身分驗證，
+// 綁 0.0.0.0 會讓同網段任何裝置都能觸發，故限制為僅本機可存取。
+app.listen(PORT, '127.0.0.1', () => {
   console.log(`\n  🍒 Git AutoPick Web UI`);
   console.log(`  👉  http://localhost:${PORT}\n`);
 });
