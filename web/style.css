@@ -286,6 +286,8 @@ body {
 form { display: flex; flex-direction: column; gap: var(--space-5); }
 
 .field-group { display: flex; flex-direction: column; gap: var(--space-2); }
+/* display:flex 會蓋過 hidden 屬性，需明確讓 [hidden] 生效（僅更新分支模式會隱藏 commit／推送 remote） */
+.field-group[hidden] { display: none; }
 
 .field-group-header {
   display: flex;
@@ -312,6 +314,34 @@ form { display: flex; flex-direction: column; gap: var(--space-5); }
 .field-hint {
   font-size: var(--text-xs);
   font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/* 標題與計數徽章同一行 */
+.field-label-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* 已選目錄數量徽章：即時反映 selectedDirs.length */
+.dir-count-badge {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  min-width: 1.35em;
+  padding: 1px 7px;
+  text-align: center;
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: var(--radius-full, 999px);
+  line-height: 1.5;
+  transition: background var(--dur-normal, 0.2s) var(--spring-snap, ease),
+              transform var(--dur-normal, 0.2s) var(--spring-snap, ease);
+}
+/* 數量為 0 時淡化，避免看起來像「已選 0 個」的假資訊 */
+.dir-count-badge.is-zero {
+  background: var(--color-surface-3, var(--neutral-700, #3a3a3a));
   color: var(--color-text-muted);
 }
 

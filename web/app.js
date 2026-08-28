@@ -21,6 +21,11 @@ const statusDot     = document.getElementById('status-dot');
 const statusLabel   = document.getElementById('status-label');
 const progressOverlay = document.getElementById('progress-overlay');
 
+const updateOnlyToggle = document.getElementById('update-only');
+const prModeRow        = document.getElementById('pr-mode-row');
+const commitFieldGroup = document.getElementById('commit-field-group');
+const pushRemoteGroup  = document.getElementById('push-remote-group');
+
 const prModeToggle  = document.getElementById('pr-mode');
 const prSettings    = document.getElementById('pr-settings');
 const prTrackHint   = document.getElementById('pr-track-hint');
@@ -56,6 +61,7 @@ const errors = {
 const addDirBtn          = document.getElementById('add-dir-btn');
 const projectDirsContainer= document.getElementById('project-dirs-container');
 const dirListEmpty       = document.getElementById('dir-list-empty');
+const dirCountBadge      = document.getElementById('dir-count-badge');
 
 // 目錄狀態管理
 let selectedDirs = [];
@@ -67,6 +73,11 @@ let protectedPatterns = [
 ];
 
 function renderDirList() {
+  // 即時更新已選目錄數量
+  const count = selectedDirs.length;
+  dirCountBadge.textContent = String(count);
+  dirCountBadge.classList.toggle('is-zero', count === 0);
+
   // 保留 empty placeholder，清空其他
   Array.from(projectDirsContainer.children).forEach(el => {
     if (el.id !== 'dir-list-empty') el.remove();
@@ -226,7 +237,9 @@ function isProtectedBranch(branch) {
 function updateProtectedWarning() {
   const branch = fields.branch.value.trim();
   const isPrMode = prModeToggle.checked;
-  const shouldShow = !isPrMode && isProtectedBranch(branch) && selectedDirs.length > 0;
+  // 僅更新分支不 push，主線分支拉最新是常態，不需高風險確認
+  const shouldShow = !isPrMode && !updateOnlyToggle.checked
+    && isProtectedBranch(branch) && selectedDirs.length > 0;
 
   if (!shouldShow) {
     protectedWarning.hidden = true;
@@ -246,6 +259,35 @@ function updateProtectedWarning() {
 
   protectedWarning.hidden = false;
 }
+
+// ── 僅更新分支切換 ─────────────────────────────────────────────────────────
+// 此模式只做 switch → pull，與 cherry-pick／PR 無關的欄位一律隱藏，
+// 避免使用者填了卻沒有作用而困惑。
+updateOnlyToggle.addEventListener('change', () => {
+  const on = updateOnlyToggle.checked;
+
+  // 與 PR 模式互斥：開啟時強制關閉 PR 模式並收合其設定
+  if (on && prModeToggle.checked) {
+    prModeToggle.checked = false;
+    prSettings.hidden = true;
+  }
+
+  // 隱藏不適用的欄位（commit、推送 remote、PR 模式整組）
+  commitFieldGroup.hidden = on;
+  pushRemoteGroup.hidden  = on;
+  prModeRow.hidden        = on;
+  if (on) prSettings.hidden = true;
+
+  // 隱藏的欄位清掉殘留錯誤，避免擋住送出
+  if (on) {
+    ['commit', 'pushRemote', 'targetBranch'].forEach((name) => {
+      errors[name].textContent = '';
+      fields[name].classList.remove('is-invalid');
+    });
+  }
+
+  updateProtectedWarning();
+});
 
 // ── PR 模式切換 ────────────────────────────────────────────────────────────
 prModeToggle.addEventListener('change', () => {
@@ -276,10 +318,14 @@ const validators = {
     return '';
   },
   pushRemote(val) {
+    // 僅更新分支不 push，此欄位無作用
+    if (updateOnlyToggle.checked) return '';
     if (!val.trim()) return '請輸入推送 remote 名稱';
     return '';
   },
   commit(val) {
+    // 僅更新分支不做 cherry-pick，免填 commit
+    if (updateOnlyToggle.checked) return '';
     if (!val.trim()) return '請輸入 commit hash';
     if (!/^[0-9a-f]{7,40}$/i.test(val.trim())) return 'commit hash 格式不正確（需 7~40 位 hex）';
     return '';
@@ -429,11 +475,13 @@ form.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!validateAll()) return;
 
-  const isPrMode = prModeToggle.checked;
+  const isUpdateOnly = updateOnlyToggle.checked;
+  const isPrMode = !isUpdateOnly && prModeToggle.checked;
   const branch = fields.branch.value.trim();
 
   // 高風險分支閘門：後端會再擋一次，此處僅為即時回饋
-  if (!isPrMode && isProtectedBranch(branch) && !confirmProtected.checked) {
+  // 僅更新分支不 push，跳過此閘門
+  if (!isUpdateOnly && !isPrMode && isProtectedBranch(branch) && !confirmProtected.checked) {
     updateProtectedWarning();
     submitStatus.textContent = '請先確認直接推送高風險分支';
     confirmProtected.focus();
@@ -457,9 +505,10 @@ form.addEventListener('submit', async (e) => {
     branch,
     remote:      fields.remote.value.trim(),
     pushRemote:  fields.pushRemote.value.trim() || 'origin',
-    commit:      fields.commit.value.trim(),
+    commit:      isUpdateOnly ? undefined : fields.commit.value.trim(),
     concurrency: Number(fields.concurrency.value) || 3,
     isDryRun,
+    isUpdateOnly,
     isPrMode,
     targetBranch: isPrMode ? fields.targetBranch.value.trim() : undefined,
     prTitle:      isPrMode ? document.getElementById('pr-title').value.trim() : undefined,

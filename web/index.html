@@ -46,7 +46,10 @@
         <div class="field-group">
           <div class="field-group-header">
             <label class="field-label">
-              目標專案目錄
+              <span class="field-label-row">
+                目標專案目錄
+                <span class="dir-count-badge is-zero" id="dir-count-badge" aria-live="polite">0</span>
+              </span>
               <span class="field-hint">點擊按鈕選取要處理的專案目錄</span>
             </label>
             <button type="button" id="add-dir-btn" class="btn btn-ghost btn-sm" aria-label="新增專案目錄">+ 新增目錄</button>
@@ -95,7 +98,7 @@
         </div>
 
         <!-- Commit Hash -->
-        <div class="field-group">
+        <div class="field-group" id="commit-field-group">
           <label class="field-label" for="commit">Commit Hash</label>
           <input
             type="text"
@@ -111,8 +114,8 @@
           <span class="field-error" id="commit-error" role="alert" aria-live="polite"></span>
         </div>
 
-        <!-- 推送 Remote（兩種模式皆使用） -->
-        <div class="field-group">
+        <!-- 推送 Remote（直推／PR 模式使用；僅更新分支不 push，不需要） -->
+        <div class="field-group" id="push-remote-group">
           <label class="field-label" for="push-remote">
             推送 Remote
             <span class="field-hint">工作分支推送的目的地（預設 origin）</span>
@@ -131,8 +134,21 @@
           <span class="field-error" id="push-remote-error" role="alert" aria-live="polite"></span>
         </div>
 
-        <!-- PR 模式 -->
+        <!-- 僅更新分支 -->
         <div class="field-toggle-row">
+          <label class="toggle-label" for="update-only">
+            <input type="checkbox" id="update-only" class="toggle-input" />
+            <span class="toggle-track" aria-hidden="true">
+              <span class="toggle-thumb"></span>
+            </span>
+            <span class="toggle-text">
+              僅更新分支 <em>（只做 switch → pull，把工作分支拉到最新，不 cherry-pick、不 push）</em>
+            </span>
+          </label>
+        </div>
+
+        <!-- PR 模式 -->
+        <div class="field-toggle-row" id="pr-mode-row">
           <label class="toggle-label" for="pr-mode">
             <input type="checkbox" id="pr-mode" class="toggle-input" />
             <span class="toggle-track" aria-hidden="true">

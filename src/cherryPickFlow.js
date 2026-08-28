@@ -2,13 +2,17 @@
  * cherryPickFlow.js
  * 單一專案的完整 cherry-pick 流程模組
  *
- * 兩種模式：
+ * 三種模式：
  *   直推模式（isPrMode: false，預設）
  *     switch → pull → fetch → cherry-pick → push，維持既有行為。
  *
  *   PR 模式（isPrMode: true）
  *     fetch 基準 → 分支就位 → fetch 來源 → cherry-pick → push → 建立 PR
  *     → 切回原分支 →（選用）自動合併。
+ *
+ *   僅更新分支（isUpdateOnly: true）
+ *     switch → pull --ff-only，把工作分支拉到最新即停止，不做 cherry-pick／push。
+ *     用於「單純把某分支同步到遠端最新」的情境，全程不改動遠端。
  *
  *     自動合併適用於「主線僅禁止直推、不要求審核核准」的專案：PR 是流程要求
  *     而非審查關卡，全程不涉及 approve。
@@ -52,6 +56,7 @@ function stripAnsi(str) {
  * @param {boolean}  params.isDryRun       - 是否為模擬模式
  * @param {import('events').EventEmitter} [params.emitter]
  * @param {boolean}  [params.isPrMode]     - 是否啟用 PR 模式
+ * @param {boolean}  [params.isUpdateOnly] - 是否啟用「僅更新分支」（switch → pull，不 cherry-pick／push）
  * @param {string}   [params.targetBranch] - PR 合併目標分支（PR 模式必填）
  * @param {string}   [params.prTitle]      - PR 標題，留空時取 commit 標題
  * @param {string}   [params.pushRemote]   - 推送 remote，預設 origin
@@ -62,6 +67,7 @@ function stripAnsi(str) {
 export async function runCherryPickFlow({
   projectDir, branch, remote, commit, isDryRun, emitter,
   isPrMode = false,
+  isUpdateOnly = false,
   targetBranch,
   prTitle,
   pushRemote = 'origin',
@@ -126,6 +132,10 @@ export async function runCherryPickFlow({
     await git.runGit(args, projectDir, isDryRun);
   };
 
+  if (isUpdateOnly) {
+    return runUpdateOnlyMode({ git, log, fail, projectDir, branch, remote, isDryRun });
+  }
+
   return isPrMode
     ? runPrMode({
         git, pr, log, fail, projectDir, branch, remote, commit, isDryRun,
@@ -135,6 +145,48 @@ export async function runCherryPickFlow({
     : runDirectMode({
         git, log, fail, projectDir, branch, remote, commit, isDryRun, pushRemote,
       });
+}
+
+// ── 僅更新分支模式 ──────────────────────────────────────────────────────────
+
+/**
+ * 僅更新分支：switch → pull --ff-only，把工作分支同步到遠端最新即停止。
+ *
+ * 全程不改動遠端（無 push、無建立 PR），故不需要任何清理規約：
+ * pull --ff-only 在分支分岔時會直接失敗，不會產生非預期的合併提交，
+ * 本地狀態維持在 pull 前，使用者自行決定如何處理分岔即可。
+ *
+ * 刻意不切回原分支——語意即「把這個分支拉到最新」，停留在該分支符合預期，
+ * 與直推模式停留在目標分支的既有行為一致。
+ */
+async function runUpdateOnlyMode({ git, log, fail, projectDir, branch, remote, isDryRun }) {
+  // ── Step 0: git switch {branch} ──────────────────────────────────────────
+  log(chalk.gray(`git switch ${branch}`), 'info', `git switch ${branch}`);
+  const switchResult = await git.runGit(['switch', branch], projectDir, isDryRun);
+
+  if (switchResult.exitCode !== 0) {
+    const reason = buildReason(`git switch ${branch} 失敗`, switchResult);
+    log(chalk.red(`✗ ${reason}`), 'error', `✗ ${reason}`);
+    return fail(reason);
+  }
+  log(chalk.green(`✓ 已切換至 ${branch}`), 'success', `✓ 已切換至 ${branch}`);
+
+  // ── Step 1: git pull --ff-only {remote} {branch} ─────────────────────────
+  // --ff-only：分支分岔時直接失敗，不產生非預期的合併提交（與 PR 模式同一準則）
+  log(chalk.gray(`git pull --ff-only ${remote} ${branch}`), 'info', `git pull --ff-only ${remote} ${branch}`);
+  const pullResult = await git.runGit(['pull', '--ff-only', remote, branch], projectDir, isDryRun);
+
+  if (pullResult.exitCode !== 0) {
+    const reason = buildReason('git pull 失敗', pullResult);
+    log(chalk.red(`✗ ${reason}`), 'error', `✗ ${reason}`);
+    return fail(reason);
+  }
+  log(chalk.green(`✓ ${branch} 已更新至最新`), 'success', `✓ ${branch} 已更新至最新`);
+
+  return {
+    status: STATUS.SUCCESS, reason: null,
+    prUrl: null, prCreated: false, prError: null, merged: false, mergeError: null,
+  };
 }
 
 // ── 直推模式 ────────────────────────────────────────────────────────────────

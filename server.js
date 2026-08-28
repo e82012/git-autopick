@@ -74,6 +74,7 @@ app.post('/api/run', async (req, res) => {
     projectDirs, branch, remote, commit, isDryRun,
     concurrency: rawConcurrency,
     isPrMode = false,
+    isUpdateOnly = false,
     targetBranch,
     prTitle,
     pushRemote = 'origin',
@@ -84,8 +85,15 @@ app.post('/api/run', async (req, res) => {
   } = req.body;
 
   // ── 基本驗證 ────────────────────────────────────────────────────────────
-  if (!Array.isArray(projectDirs) || !projectDirs.length || !branch || !remote || !commit) {
+  // 僅更新分支模式不做 cherry-pick，commit 非必填；其餘模式維持必填
+  const commitRequired = isUpdateOnly !== true;
+  if (!Array.isArray(projectDirs) || !projectDirs.length || !branch || !remote || (commitRequired && !commit)) {
     return res.status(400).json({ error: '缺少必要參數' });
+  }
+
+  // 僅更新分支與 PR 模式互斥：兩者流程完全不同，不允許同時啟用
+  if (isUpdateOnly === true && isPrMode === true) {
+    return res.status(400).json({ error: '「僅更新分支」與「PR 模式」不可同時啟用' });
   }
 
   // PR 模式下基準分支為必填，否則無從決定新分支的切出點與 PR 合併目標
@@ -102,7 +110,8 @@ app.post('/api/run', async (req, res) => {
   // ── 高風險分支閘門 ──────────────────────────────────────────────────────
   // 防的是「推得上去、但撤銷需要強制推送」的情境；被伺服器擋下的推送
   // 屬 push 失敗路徑，已有完整回復機制，不需要事前攔截。
-  if (isProtectedBranch(branch)) {
+  // 僅更新分支模式全程不 push，主線分支拉最新是常態操作，不套用此閘門。
+  if (isUpdateOnly !== true && isProtectedBranch(branch)) {
     if (isPrMode === true) {
       return res.status(400).json({
         error: `PR 模式的工作分支不可為主線分支「${branch}」，請改用功能分支名稱`,
@@ -159,6 +168,7 @@ app.post('/api/run', async (req, res) => {
           isDryRun: isDryRun === true,
           emitter,
           isPrMode: isPrMode === true,
+          isUpdateOnly: isUpdateOnly === true,
           targetBranch,
           prTitle,
           pushRemote,
