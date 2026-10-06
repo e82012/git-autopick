@@ -128,7 +128,9 @@ export function parsePrUrl(stdout, stderr) {
   const matches = combined.match(/https:\/\/[^\s'"]+/g);
   if (!matches) return null;
 
-  const hit = matches.find((url) => url.includes('/pull/') || url.includes('/compare/'));
+  // /merge_requests/：GitLab 推送新分支時於 remote 訊息附上的開 MR 連結
+  const hit = matches.find((url) =>
+    url.includes('/pull/') || url.includes('/compare/') || url.includes('/merge_requests/'));
   // 去除輸出換行可能帶入的結尾標點
   return hit ? hit.replace(/[.,;)\]]+$/, '') : null;
 }
@@ -151,7 +153,7 @@ export function parsePrUrl(stdout, stderr) {
  * @param {string} [params.pushStdout]  - push 的輸出，供解析既有連結
  * @param {string} [params.pushStderr]
  * @param {boolean}[params.isDryRun]
- * @returns {Promise<{ url: string|null, created: boolean, error: string|null }>}
+ * @returns {Promise<{ url: string|null, created: boolean, error: string|null, notice?: string|null }>}
  */
 export async function createPullRequest({
   cwd, pushRemote, branch, targetBranch, title, body,
@@ -162,12 +164,17 @@ export async function createPullRequest({
   const ownerRepo = parseOwnerRepo(remoteUrl);
 
   if (!ownerRepo) {
-    // 仍嘗試自 push 輸出撈連結：非 GitHub 平台也可能印出可用網址
+    // 非 GitHub 平台（如 GitLab）：分支已推送，本工具不代開 PR，改為提示自行建立。
+    // 不回報為 error——推送本身是成功的，標成錯誤會讓人誤以為需要退回。
+    // 仍嘗試自 push 輸出撈連結：GitLab 會印出開 MR 的網址
     const parsed = parsePrUrl(pushStdout, pushStderr);
     return {
       url: parsed,
       created: false,
-      error: parsed ? null : `無法自 remote「${pushRemote}」解析 GitHub 專案（${remoteUrl || '取不到 URL'}）`,
+      error: null,
+      notice: parsed
+        ? null
+        : `remote「${pushRemote}」非 GitHub（${remoteUrl || '取不到 URL'}），分支已推送，請至該平台自行建立 PR／MR`,
     };
   }
 

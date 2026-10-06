@@ -7,8 +7,8 @@
  *     switch → pull → fetch → cherry-pick → push，維持既有行為。
  *
  *   PR 模式（isPrMode: true）
- *     fetch 基準 → 分支就位 → fetch 來源 → cherry-pick → push → 建立 PR
- *     → 切回原分支 →（選用）自動合併。
+ *     switch 基準 → pull --ff-only 基準 → fetch 來源 → 自基準開工作分支
+ *     → cherry-pick → push 工作分支 → 建立 PR → 切回原分支 →（選用）自動合併。
  *
  *   僅更新分支（isUpdateOnly: true）
  *     switch → pull --ff-only，把工作分支拉到最新即停止，不做 cherry-pick／push。
@@ -280,17 +280,47 @@ async function runPrMode({
   targetBranch, prTitle, pushRemote, originalRef, restoreOriginalRef,
   autoMerge, mergeMethod, deleteBranchOnMerge,
 }) {
-  // ── Step 1: 同步基準分支 ─────────────────────────────────────────────────
-  log(chalk.gray(`git fetch ${pushRemote} ${targetBranch}`), 'info', `git fetch ${pushRemote} ${targetBranch}`);
-  const fetchBase = await git.runGit(['fetch', pushRemote, targetBranch], projectDir, isDryRun);
+  // ── Step 1: 切到基準分支 ─────────────────────────────────────────────────
+  // 新分支要從「本地且已拉到最新」的基準分支切出，讓本地基準分支與遠端同步，
+  // 使用者事後切回基準分支時看到的就是最新狀態。
+  const baseSwitch = await switchToBaseBranch({ git, log, projectDir, targetBranch, pushRemote, isDryRun });
 
-  if (fetchBase.exitCode !== 0) {
-    const reason = buildReason(`git fetch ${pushRemote} ${targetBranch} 失敗`, fetchBase);
+  if (baseSwitch.exitCode !== 0) {
+    const reason = buildReason(`切換至基準分支 ${targetBranch} 失敗`, baseSwitch);
     log(chalk.red(`✗ ${reason}`), 'error', `✗ ${reason}`);
+    await restoreOriginalRef();
     return fail(reason);
   }
+  log(chalk.green(`✓ 已切換至 ${targetBranch}`), 'success', `✓ 已切換至 ${targetBranch}`);
 
-  // ── Step 2-3: 分支就位 ───────────────────────────────────────────────────
+  // ── Step 2: 基準分支拉到最新 ─────────────────────────────────────────────
+  // --ff-only：本地基準分支若有未推送的提交（與遠端分岔），直接中止而非產生合併提交，
+  // 否則這些提交會被一起帶進新分支、出現在 PR 裡。
+  log(chalk.gray(`git pull --ff-only ${pushRemote} ${targetBranch}`), 'info', `git pull --ff-only ${pushRemote} ${targetBranch}`);
+  const pullBase = await git.runGit(['pull', '--ff-only', pushRemote, targetBranch], projectDir, isDryRun);
+
+  if (pullBase.exitCode !== 0) {
+    const reason = buildReason(`git pull ${pushRemote} ${targetBranch} 失敗（本地 ${targetBranch} 可能與遠端分岔）`, pullBase);
+    log(chalk.red(`✗ ${reason}`), 'error', `✗ ${reason}`);
+    await restoreOriginalRef();
+    return fail(reason);
+  }
+  log(chalk.green(`✓ ${targetBranch} 已更新至最新`), 'success', `✓ ${targetBranch} 已更新至最新`);
+
+  // ── Step 3: 取得 cherry-pick 來源 ────────────────────────────────────────
+  // 排在開分支之前：fetch 失敗時尚未建立任何分支，只需切回原分支即可
+  log(chalk.gray(`git fetch ${remote}`), 'info', `git fetch ${remote}`);
+  const fetchSrc = await git.runGit(['fetch', remote], projectDir, isDryRun);
+
+  if (fetchSrc.exitCode !== 0) {
+    const reason = buildReason(`git fetch ${remote} 失敗`, fetchSrc);
+    log(chalk.red(`✗ ${reason}`), 'error', `✗ ${reason}`);
+    await restoreOriginalRef();
+    return fail(reason);
+  }
+  log(chalk.green('✓ fetch 成功'), 'success', '✓ fetch 成功');
+
+  // ── Step 4: 工作分支就位 ─────────────────────────────────────────────────
   // 本地與遠端分開判定：四種組合的就位方式不同，合併成單一布林會使
   // 「本地有、遠端無」誤走 pull 路徑而失敗。
   const exists = await git.branchExists(branch, projectDir, pushRemote);
@@ -318,18 +348,6 @@ async function runPrMode({
       await git.runGit(['branch', '-D', branch], projectDir, isDryRun);
     }
   };
-
-  // ── Step 4: 取得 cherry-pick 來源 ────────────────────────────────────────
-  log(chalk.gray(`git fetch ${remote}`), 'info', `git fetch ${remote}`);
-  const fetchSrc = await git.runGit(['fetch', remote], projectDir, isDryRun);
-
-  if (fetchSrc.exitCode !== 0) {
-    const reason = buildReason(`git fetch ${remote} 失敗`, fetchSrc);
-    log(chalk.red(`✗ ${reason}`), 'error', `✗ ${reason}`);
-    await restoreOriginalRef();
-    if (isNewlyCreated) await git.runGit(['branch', '-D', branch], projectDir, isDryRun);
-    return fail(reason);
-  }
 
   // ── Step 5: 決定 PR 標題 ─────────────────────────────────────────────────
   let resolvedTitle = git.sanitizeArgValue(prTitle || '');
@@ -414,6 +432,11 @@ async function runPrMode({
     log(chalk.cyan(`→ 開單連結：${prResult.url}`), 'info', `→ 開單連結：${prResult.url}`);
   }
 
+  // 非 GitHub 平台：分支已推送成功，只是本工具無法代開 PR，屬正常結束而非錯誤
+  if (prResult.notice) {
+    log(chalk.cyan(`→ ${prResult.notice}`), 'info', `→ ${prResult.notice}`);
+  }
+
   // 清理規約 C：推送已成功，不因 PR 未建立而回退——撤銷已推送的提交
   // 需要強制推送，屬全域禁止項。改為輸出不需強制推送的 revert 指引。
   if (prResult.error) {
@@ -478,16 +501,20 @@ async function runPrMode({
  * @returns {Promise<{ exitCode: number, stdout: string, stderr: string }>}
  */
 async function checkoutWorkBranch({ git, log, projectDir, branch, targetBranch, pushRemote, isDryRun, exists }) {
-  // 全新分支：自最新基準切出
+  // 全新分支：自剛拉到最新的本地基準分支切出
   if (!exists.local && !exists.remote) {
-    const cmd = `git checkout -b ${branch} ${pushRemote}/${targetBranch}`;
-    log(chalk.gray(`偵測為新分支，自 ${pushRemote}/${targetBranch} 切出`), 'info', `偵測為新分支，自 ${pushRemote}/${targetBranch} 切出`);
+    const cmd = `git checkout -b ${branch} ${targetBranch}`;
+    log(chalk.gray(`偵測為新分支，自 ${targetBranch} 切出`), 'info', `偵測為新分支，自 ${targetBranch} 切出`);
     log(chalk.gray(cmd), 'info', cmd);
-    return git.runGit(['checkout', '-b', branch, `${pushRemote}/${targetBranch}`], projectDir, isDryRun);
+    return git.runGit(['checkout', '-b', branch, targetBranch], projectDir, isDryRun);
   }
 
   // 既有分支：切過去，不與基準對齊（維持該分支既有進度）
-  log(chalk.gray(`切換至既有分支 ${branch}`), 'info', `切換至既有分支 ${branch}`);
+  log(
+    chalk.yellow(`⚠ 工作分支 ${branch} 已存在，沿用既有進度，不重新自 ${targetBranch} 切出`),
+    'warn',
+    `⚠ 工作分支 ${branch} 已存在，沿用既有進度，不重新自 ${targetBranch} 切出`,
+  );
   log(chalk.gray(`git switch ${branch}`), 'info', `git switch ${branch}`);
   const switchResult = await git.runGit(['switch', branch], projectDir, isDryRun);
   if (switchResult.exitCode !== 0) return switchResult;
@@ -501,6 +528,33 @@ async function checkoutWorkBranch({ git, log, projectDir, branch, targetBranch, 
   // --ff-only：分支分岔時直接失敗並進入清理規約，不產生非預期的合併提交
   log(chalk.gray(`git pull --ff-only ${pushRemote} ${branch}`), 'info', `git pull --ff-only ${pushRemote} ${branch}`);
   return git.runGit(['pull', '--ff-only', pushRemote, branch], projectDir, isDryRun);
+}
+
+/**
+ * 切到基準分支
+ *
+ * 本地沒有基準分支時明確指定追蹤來源建立：多 remote 專案（例如同時有 github 與 gitlab
+ * 且都有 main）下，單純 git switch main 會因比對到多個遠端分支而失敗。
+ *
+ * @returns {Promise<{ exitCode: number, stdout: string, stderr: string }>}
+ */
+async function switchToBaseBranch({ git, log, projectDir, targetBranch, pushRemote, isDryRun }) {
+  const localRes = await git.queryGit(['rev-parse', '--verify', '--quiet', `refs/heads/${targetBranch}`], projectDir);
+
+  if (localRes.exitCode === 0) {
+    log(chalk.gray(`git switch ${targetBranch}`), 'info', `git switch ${targetBranch}`);
+    return git.runGit(['switch', targetBranch], projectDir, isDryRun);
+  }
+
+  // 遠端參照可能從未 fetch 過，先取得才有建立追蹤的來源
+  log(chalk.gray(`本地尚無 ${targetBranch}，自 ${pushRemote}/${targetBranch} 建立`), 'info', `本地尚無 ${targetBranch}，自 ${pushRemote}/${targetBranch} 建立`);
+  log(chalk.gray(`git fetch ${pushRemote} ${targetBranch}`), 'info', `git fetch ${pushRemote} ${targetBranch}`);
+  const fetchRes = await git.runGit(['fetch', pushRemote, targetBranch], projectDir, isDryRun);
+  if (fetchRes.exitCode !== 0) return fetchRes;
+
+  const cmd = `git switch -c ${targetBranch} --track ${pushRemote}/${targetBranch}`;
+  log(chalk.gray(cmd), 'info', cmd);
+  return git.runGit(['switch', '-c', targetBranch, '--track', `${pushRemote}/${targetBranch}`], projectDir, isDryRun);
 }
 
 // ── 內部輔助函式 ─────────────────────────────────────────────────────────────

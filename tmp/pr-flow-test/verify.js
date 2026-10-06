@@ -114,8 +114,84 @@ section('分支就位判定');
     ...BASE, isPrMode: true, targetBranch: 'main', gitRunner: git, prProvider: makePr(),
   });
   check(
-    '1. 全新分支：自 origin/main 切出',
-    git.calls.includes('checkout -b feat/fix-rounding origin/main'),
+    '1. 全新分支：自已拉到最新的本地 main 切出',
+    git.calls.includes('checkout -b feat/fix-rounding main'),
+    git.calls.join(' | '),
+  );
+}
+
+{
+  // 開分支流程：切 main → pull → fetch 來源 → 開分支 → cherry-pick → push
+  const git = makeGit({ branchState: { local: false, remote: false }, currentBranch: 'feat/other' });
+  await runCherryPickFlow({
+    ...BASE, isPrMode: true, targetBranch: 'main', gitRunner: git, prProvider: makePr(),
+  });
+  const EXPECTED = [
+    'switch main',
+    'pull --ff-only origin main',
+    'fetch upstream',
+    'checkout -b feat/fix-rounding main',
+    'cherry-pick abc1234',
+    'push origin feat/fix-rounding',
+    'switch feat/other',
+  ];
+  check(
+    '1b. 新分支指令序列：切基準 → 拉最新 → fetch 來源 → 開分支 → cherry-pick → push → 切回原分支',
+    JSON.stringify(git.calls) === JSON.stringify(EXPECTED),
+    `實際：${git.calls.join(' | ')}`,
+  );
+}
+
+{
+  // 本地沒有基準分支：先 fetch 再明確指定追蹤來源建立（多 remote 下單純 switch 會失敗）
+  const git = makeGit({ branchState: { local: false, remote: false } });
+  git.queryGit = async (args) => (
+    args.includes('refs/heads/main') ? { exitCode: 1, stdout: '', stderr: '' } : { exitCode: 0, stdout: '', stderr: '' }
+  );
+  await runCherryPickFlow({
+    ...BASE, isPrMode: true, targetBranch: 'main', gitRunner: git, prProvider: makePr(),
+  });
+  const fetchIdx  = git.calls.indexOf('fetch origin main');
+  const createIdx = git.calls.indexOf('switch -c main --track origin/main');
+  check(
+    '1c. 本地無基準分支：fetch 後以 --track 建立',
+    fetchIdx >= 0 && createIdx > fetchIdx,
+    git.calls.join(' | '),
+  );
+}
+
+{
+  // 基準分支 pull 失敗（本地 main 分岔）：不得開分支，切回原分支
+  const git = makeGit({
+    branchState: { local: false, remote: false },
+    currentBranch: 'feat/other',
+    fail: { 'pull --ff-only origin main': { stderr: 'fatal: Not possible to fast-forward, aborting.' } },
+  });
+  const result = await runCherryPickFlow({
+    ...BASE, isPrMode: true, targetBranch: 'main', gitRunner: git, prProvider: makePr(),
+  });
+  check(
+    '1d. 基準分支 pull 失敗：FAILED、未開分支、已切回原分支',
+    result.status === STATUS.FAILED
+      && !git.calls.some((c) => c.startsWith('checkout -b') || c.startsWith('cherry-pick') || c.startsWith('push'))
+      && git.calls[git.calls.length - 1] === 'switch feat/other',
+    git.calls.join(' | '),
+  );
+}
+
+{
+  // fetch 來源失敗：尚未開分支，不需刪除任何分支
+  const git = makeGit({
+    branchState: { local: false, remote: false },
+    fail: { 'fetch upstream': { stderr: 'fatal: unable to access' } },
+  });
+  const result = await runCherryPickFlow({
+    ...BASE, isPrMode: true, targetBranch: 'main', gitRunner: git, prProvider: makePr(),
+  });
+  check(
+    '1e. fetch 來源失敗：FAILED 且未開分支、未刪分支',
+    result.status === STATUS.FAILED
+      && !git.calls.some((c) => c.startsWith('checkout -b') || c.startsWith('branch -D')),
     git.calls.join(' | '),
   );
 }
@@ -152,8 +228,9 @@ section('分支就位判定');
     ...BASE, isPrMode: true, targetBranch: 'main', gitRunner: git, prProvider: makePr(),
   });
   check(
-    '4. 本地既有未推：switch 但不含 pull',
-    git.calls.includes('switch feat/fix-rounding') && !git.calls.some((c) => c.startsWith('pull')),
+    '4. 本地既有未推：switch 但不 pull 工作分支',
+    git.calls.includes('switch feat/fix-rounding')
+      && !git.calls.some((c) => c.startsWith('pull') && c.endsWith('feat/fix-rounding')),
     git.calls.join(' | '),
   );
 }
@@ -303,6 +380,23 @@ section('清理規約 C（push 成功、PR 建立失敗）');
   );
 }
 
+{
+  const git = makeGit({ branchState: { local: false, remote: false } });
+  const pr  = makePr({ url: null, created: false, error: null, notice: 'remote「origin」非 GitHub，分支已推送，請至該平台自行建立 PR／MR' });
+  const logs = [];
+  const emitter = { emit: (_evt, entry) => logs.push(entry) };
+  const result = await runCherryPickFlow({
+    ...BASE, isPrMode: true, targetBranch: 'main', gitRunner: git, prProvider: pr, emitter,
+  });
+  check(
+    '11b. 非 GitHub remote：SUCCESS、無 prError、不輸出 revert 指引',
+    result.status === STATUS.SUCCESS && result.prError === null
+      && !logs.some((l) => l.message.includes('revert'))
+      && logs.some((l) => l.message.includes('非 GitHub')),
+    `status=${result.status} / prError=${result.prError}`,
+  );
+}
+
 // ── 12：髒工作區攔截 ────────────────────────────────────────────────────────
 section('前置檢查');
 
@@ -366,6 +460,11 @@ check(
   '16. 自 push stderr 解析 PR 連結',
   parsePrUrl('', 'remote: Create a pull request for \'feat/x\' on GitHub by visiting:\nremote:   https://github.com/acme/site/pull/new/feat/x')
     === 'https://github.com/acme/site/pull/new/feat/x',
+);
+check(
+  '16a. 自 GitLab push 輸出解析開 MR 連結',
+  parsePrUrl('', 'remote: To create a merge request for feat/x, visit:\nremote:   https://gitlab.com/acme/site/-/merge_requests/new?merge_request%5Bsource_branch%5D=feat%2Fx')
+    === 'https://gitlab.com/acme/site/-/merge_requests/new?merge_request%5Bsource_branch%5D=feat%2Fx',
 );
 check(
   '16b. 無連結時回傳 null',

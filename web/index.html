@@ -155,12 +155,18 @@
               <span class="toggle-thumb"></span>
             </span>
             <span class="toggle-text">
-              PR 模式 <em>（推送至工作分支並開立 Pull Request）</em>
+              PR 模式 <em>（從合併目標分支開新工作分支，cherry-pick 後推送工作分支，再以 PR 合入）</em>
             </span>
           </label>
         </div>
 
         <div id="pr-settings" class="pr-settings" hidden>
+          <!-- 依目前輸入即時組出的實際指令序列，送出前即可確認會發生什麼事 -->
+          <div class="pr-flow-preview" aria-labelledby="pr-flow-title">
+            <p class="pr-flow-title" id="pr-flow-title">執行步驟（每個專案）</p>
+            <ol class="pr-flow-steps" id="pr-flow-steps"></ol>
+          </div>
+
           <p class="pr-track-hint" id="pr-track-hint">正在確認 PR 建立方式…</p>
 
           <div class="field-group">

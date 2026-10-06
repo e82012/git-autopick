@@ -458,6 +458,46 @@ updateOnlyToggle.addEventListener('change', () => {
   updateProtectedWarning();
 });
 
+// ── PR 模式步驟預覽 ────────────────────────────────────────────────────────
+// 與 cherryPickFlow.js runPrMode 的指令序列一一對應，讓使用者送出前就看得到
+// 「從哪個分支開、推到哪裡」，不必猜工具內部做了什麼。
+const prFlowSteps = document.getElementById('pr-flow-steps');
+
+function updatePrFlowPreview() {
+  const val = (input, fallback) => input.value.trim() || fallback;
+  const base   = val(fields.targetBranch, '<合併目標分支>');
+  const push   = val(fields.pushRemote, '<推送 Remote>');
+  const src    = val(fields.remote, '<Fetch Remote>');
+  const branch = val(fields.branch, '<工作分支>');
+  const commit = val(fields.commit, '<commit>');
+
+  const steps = [
+    [`切到基準分支`, `git switch ${base}`],
+    [`基準分支拉到最新`, `git pull --ff-only ${push} ${base}`],
+    [`取得 cherry-pick 來源`, `git fetch ${src}`],
+    [`從 ${base} 開新分支（分支已存在則沿用既有進度）`, `git checkout -b ${branch} ${base}`],
+    [`套用提交`, `git cherry-pick ${commit}`],
+    [`推送工作分支`, `git push ${push} ${branch}`],
+    [`建立 PR（${branch} → ${base}），完成後切回原分支`, null],
+  ];
+
+  prFlowSteps.replaceChildren(...steps.map(([label, cmd]) => {
+    const li = document.createElement('li');
+    li.append(`${label}${cmd ? '：' : ''}`);
+    if (cmd) {
+      const code = document.createElement('code');
+      code.textContent = cmd;
+      li.append(code);
+    }
+    return li;
+  }));
+}
+
+['branch', 'remote', 'pushRemote', 'commit', 'targetBranch'].forEach((name) => {
+  fields[name].addEventListener('input', updatePrFlowPreview);
+});
+updatePrFlowPreview();
+
 // ── PR 模式切換 ────────────────────────────────────────────────────────────
 prModeToggle.addEventListener('change', () => {
   prSettings.hidden = !prModeToggle.checked;
